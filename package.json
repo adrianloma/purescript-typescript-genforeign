@@ -1,0 +1,11 @@
+{
+  "name": "purescript-typescript-parser",
+  "version": "0.1.0",
+  "description": "A set of functions for working with typescript in purescript.",
+  "main": "index.js",
+  "author": "adrianloma",
+  "license": "MIT",
+  "dependencies": {
+    "typescript": "^4.0.2"
+  }
+}
