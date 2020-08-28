@@ -91,28 +91,22 @@ function generateDocumentationForProgram(program) {
     // print out the doc
     return JSON.stringify(output, undefined, 4);
 
-    /** Serialize a signature (call or construct) */
-    function serializeSignature2(signature) {
-        return signature.declarations[0].parameters.map(function (param) {
-            let paramSymbol = checker.getSymbolAtLocation(param.name);
-            return {
-                name: paramSymbol.getName()
-                , documentation: ts.displayPartsToString(paramSymbol.getDocumentationComment(checker))
-                , type: checker.typeToString(checker.getTypeOfSymbolAtLocation(paramSymbol, paramSymbol.valueDeclaration))
-            };
-        }
-        );
-    }
+    function getMethodsForClassNode(classNode){
+        var methods = [];
 
-    function makeClassVisitor(arrayMethods){
-        return function(node){
+        ts.forEachChild(classNode, visitNodeInsideClass);
+
+        return methods;
+
+        function visitNodeInsideClass(node){
             if (ts.isMethodDeclaration(node) && node.name) {
                 let symbol = checker.getSymbolAtLocation(node.name);
                 if (symbol) {
                     let methodDetails = serializeSymbol(symbol);
-                    methodDetails.parameters = symbol.declarations[0]
-                        .parameters.map((param) => checker.getSymbolAtLocation(param.name)).map(serializeSymbol);
-                    arrayMethods.push(methodDetails);
+                    methodDetails.parameters = symbol.declarations[0].parameters
+                        .map((param) => checker.getSymbolAtLocation(param.name))
+                        .map(serializeSymbol);
+                    methods.push(methodDetails);
                 }
             }
         };
@@ -128,10 +122,7 @@ function generateDocumentationForProgram(program) {
             let symbol = checker.getSymbolAtLocation(node.name);
             if (symbol) {
                 const serializedClass = serializeClass(symbol);
-                var methods = [];
-                const classVisitor = makeClassVisitor(methods);
-                ts.forEachChild(node, classVisitor);
-                serializedClass.methods = methods;
+                serializedClass.methods = getMethodsForClassNode(node);
                 output.push(serializedClass);
             }
         } else if (ts.isModuleDeclaration(node)) {
