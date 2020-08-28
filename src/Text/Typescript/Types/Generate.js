@@ -91,6 +91,32 @@ function generateDocumentationForProgram(program) {
     // print out the doc
     return JSON.stringify(output, undefined, 4);
 
+    /** Serialize a signature (call or construct) */
+    function serializeSignature2(signature) {
+        return signature.declarations[0].parameters.map(function (param) {
+            let paramSymbol = checker.getSymbolAtLocation(param.name);
+            return {
+                name: paramSymbol.getName()
+                , documentation: ts.displayPartsToString(paramSymbol.getDocumentationComment(checker))
+                , type: checker.typeToString(checker.getTypeOfSymbolAtLocation(paramSymbol, paramSymbol.valueDeclaration))
+            };
+        }
+        );
+    }
+
+    function makeClassVisitor(arrayMethods){
+        return function(node){
+            if (ts.isMethodDeclaration(node) && node.name) {
+                let symbol = checker.getSymbolAtLocation(node.name);
+                if (symbol) {
+                    let methodDetails = serializeSymbol(symbol);
+                    methodDetails.parameters = symbol.declarations[0]
+                        .parameters.map((param) => checker.getSymbolAtLocation(param.name)).map(serializeSymbol);
+                    arrayMethods.push(methodDetails);
+                }
+            }
+        };
+    }
     /** visit nodes finding exported classes */
     function visit(node) {
         // Only consider exported nodes
@@ -101,12 +127,14 @@ function generateDocumentationForProgram(program) {
             // This is a top level class, get its symbol
             let symbol = checker.getSymbolAtLocation(node.name);
             if (symbol) {
-                output.push(serializeClass(symbol));
+                const serializedClass = serializeClass(symbol);
+                var methods = [];
+                const classVisitor = makeClassVisitor(methods);
+                ts.forEachChild(node, classVisitor);
+                serializedClass.methods = methods;
+                output.push(serializedClass);
             }
-            // No need to walk any further, class expressions/inner declarations
-            // cannot be exported
-        }
-        else if (ts.isModuleDeclaration(node)) {
+        } else if (ts.isModuleDeclaration(node)) {
             // This is a namespace, visit its children
             ts.forEachChild(node, visit);
         }
@@ -127,6 +155,7 @@ function generateDocumentationForProgram(program) {
         details.constructors = constructorType
             .getConstructSignatures()
             .map(serializeSignature);
+        details.callSignatures = constructorType.getCallSignatures().map(serializeSignature);
         return details;
     }
     /** Serialize a signature (call or construct) */
