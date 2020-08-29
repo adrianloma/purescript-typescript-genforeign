@@ -10,7 +10,7 @@ import Text.Typesript.Types.Generate
 main :: Effect Unit
 main = do
   log "🍝"
-  log $ generateDocumentationForInputString program2
+  log $ generateDocumentationForInputString program
 
 program = """
 import { Camera } from './Camera';

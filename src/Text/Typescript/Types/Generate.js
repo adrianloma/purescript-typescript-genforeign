@@ -79,7 +79,9 @@ function generateDocumentationForFilesAndOptions(fileNames, options){
 function generateDocumentationForProgram(program) {
     // Get the checker, we will use it to find more about classes
     let checker = program.getTypeChecker();
-    let output = [];
+    let output = { functions : []
+                 , classes : []
+                 };
     // Visit every sourceFile in the program
     for (const sourceFile of program.getSourceFiles()) {
         if (!sourceFile.isDeclarationFile) {
@@ -91,34 +93,39 @@ function generateDocumentationForProgram(program) {
     // print out the doc
     return JSON.stringify(output, undefined, 4);
 
-    function getMethodsForClassNode(classNode){
-        var methods = [];
+    function getSignatureForDeclarationKind(parentNode, signatureKind){
+        var declarations = [];
 
-        ts.forEachChild(classNode, visitNodeInsideClass);
+        ts.forEachChild(parentNode, visitChildNodeOfParent);
 
-        return methods;
+        return declarations;
 
 
-        function visitNodeInsideClass(node){
-            if (ts.isMethodDeclaration(node) && node.name && node.name !== "toJSON") {
+        function visitChildNodeOfParent(node){
+            if (node.kind === signatureKind && node.name && node.name !== "toJSON") {
                 let symbol = checker.getSymbolAtLocation(node.name);
                 if (symbol) {
                     let getType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
-                    let methodDetails = serializeParameter(node);
-                    methodDetails.parameters = node.parameters.map(serializeParameter);
-                    methods.push(methodDetails);
+                    let declarationDetails = serializeParameterNode(node);
+                    declarationDetails.parameters = node.parameters.map(serializeParameterNode);
+                    declarations.push(declarationDetails);
                 }
             }
-
-            function serializeParameter(parameter){
-                let serializedSymbol = serializeSymbol(checker.getSymbolAtLocation(parameter.name));
-                //serializedSymbol.typeScriptType = serializeNestedType(parameter.type);
-
-                return serializedSymbol;
-
-
+            if (node.kind === signatureKind && signatureKind === ts.SyntaxKind.Constructor){
+                let classNode = node.parent;
+                let classSymbol = checker.getSymbolAtLocation(classNode.name);
+                let constructorType = checker.getTypeOfSymbolAtLocation(
+                                        classSymbol,
+                                        classSymbol.valueDeclaration);
+                declarations = constructorType
+                    .getConstructSignatures()
+                    .map((constructor) => (
+                        { parameters: node.parameters.map(serializeParameterNode)
+                          , returnType: checker.typeToString(constructor.getReturnType())
+                          , documentation: ts.displayPartsToString(constructor.getDocumentationComment(checker))
+                        }
+                ));
             }
-
         };
     }
 
@@ -132,30 +139,31 @@ function generateDocumentationForProgram(program) {
             // This is a top level class, get its symbol
             let symbol = checker.getSymbolAtLocation(node.name);
             if (symbol) {
-                const serializedClass = serializeClass(symbol);
-                serializedClass.methods = getMethodsForClassNode(node);
-                output.push(serializedClass);
+                let serializedClass = {
+                    name: symbol.getName()
+                    , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))
+                    , constructors: getSignatureForDeclarationKind(node, ts.SyntaxKind.Constructor)
+                    , methods: getSignatureForDeclarationKind(node, ts.SyntaxKind.MethodDeclaration)
+                };
+                output.classes.push(serializedClass);
             }
         } else if (ts.isModuleDeclaration(node)) {
             // This is a namespace, visit its children
             ts.forEachChild(node, visit);
+        } else if (ts.isFunctionTypeNode(node)){
+            output.functions.push(getSignatureForDeclarationKind(node, ts.SyntaxKind.FunctionTypeNode));
         }
     }
+
     /** Serialize a symbol into a json object */
-    function serializeSymbol(symbol) {
-        let symbolType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
-        var serializedType = undefined;
-        try{
-            serializedType = serializeNestedType(symbolType);
-        }catch(e){
-            console.log("donothing");;
-        }
+    function serializeParameterNode(node) {
+        let symbol = checker.getSymbolAtLocation(node.name);
         return {
-            name: symbol.getName(),
-            documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker)),
-            typeScriptType: serializedType || checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration))
+            name: symbol.getName()
+            , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))
+            , typeScriptType: serializeNestedType(node.type)
         };
-        
+
         function serializeNestedType(nextType){
             switch(nextType.kind){
             case ts.SyntaxKind.ArrayType:
@@ -166,33 +174,17 @@ function generateDocumentationForProgram(program) {
                 if(nextType.typeArguments === undefined){
                     return nextType.getText();
                 } else {
-                    return { enclosingType: parameter.type.typeName.getText()
-                             , enclosedTypes: parameter.type.typeArguments.map(serializeNestedType)
+                    return { enclosingType: nextType.typeName.getText()
+                             , enclosedTypes: nextType.typeArguments.map(serializeNestedType)
                            };
                 }
             default:
                 return nextType.getText();
             }
         }
+
     }
-    /** Serialize a class symbol information */
-    function serializeClass(symbol) {
-        let details = serializeSymbol(symbol);
-        // Get the construct signatures
-        let constructorType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
-        details.constructors = constructorType
-            .getConstructSignatures()
-            .map(serializeSignature);
-        return details;
-    }
-    /** Serialize a signature (call or construct) */
-    function serializeSignature(signature) {
-        return {
-            parameters: signature.parameters.map(serializeSymbol),
-            returnType: checker.typeToString(signature.getReturnType()),
-            documentation: ts.displayPartsToString(signature.getDocumentationComment(checker))
-        };
-    }
+
     /** True if this is visible outside this file, false otherwise */
     function isNodeExported(node) {
         return ((ts.getCombinedModifierFlags(node) & ts.ModifierFlags.Export) !== 0 ||
