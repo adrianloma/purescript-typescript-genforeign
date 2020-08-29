@@ -15,6 +15,8 @@ main = do
 program = """
 import { Camera } from './Camera';
 
+export function someFunc(type1: number, type2: Vector2, type3: Vector2[], type4: SomeClass<Type1>, type5: SomeClass2<Type2<Type3>>);
+
 /**
  * Camera with perspective projection.
  *
