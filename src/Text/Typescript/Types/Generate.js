@@ -98,19 +98,30 @@ function generateDocumentationForProgram(program) {
 
         return methods;
 
+
         function visitNodeInsideClass(node){
-            if (ts.isMethodDeclaration(node) && node.name) {
+            if (ts.isMethodDeclaration(node) && node.name && node.name !== "toJSON") {
                 let symbol = checker.getSymbolAtLocation(node.name);
                 if (symbol) {
-                    let methodDetails = serializeSymbol(symbol);
-                    methodDetails.parameters = symbol.declarations[0].parameters
-                        .map((param) => checker.getSymbolAtLocation(param.name))
-                        .map(serializeSymbol);
+                    let getType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
+                    let methodDetails = serializeParameter(node);
+                    methodDetails.parameters = node.parameters.map(serializeParameter);
                     methods.push(methodDetails);
                 }
             }
+
+            function serializeParameter(parameter){
+                let serializedSymbol = serializeSymbol(checker.getSymbolAtLocation(parameter.name));
+                //serializedSymbol.typeScriptType = serializeNestedType(parameter.type);
+
+                return serializedSymbol;
+
+
+            }
+
         };
     }
+
     /** visit nodes finding exported classes */
     function visit(node) {
         // Only consider exported nodes
@@ -132,11 +143,37 @@ function generateDocumentationForProgram(program) {
     }
     /** Serialize a symbol into a json object */
     function serializeSymbol(symbol) {
+        let symbolType = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration);
+        var serializedType = undefined;
+        try{
+            serializedType = serializeNestedType(symbolType);
+        }catch(e){
+            console.log("donothing");;
+        }
         return {
             name: symbol.getName(),
             documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker)),
-            type: checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration))
+            typeScriptType: serializedType || checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration))
         };
+        
+        function serializeNestedType(nextType){
+            switch(nextType.kind){
+            case ts.SyntaxKind.ArrayType:
+                return { enclosingType: "Array"
+                         , enclosedTypes: serializeNestedType(nextType.elementType)
+                       };
+            case ts.SyntaxKind.TypeReference:
+                if(nextType.typeArguments === undefined){
+                    return nextType.getText();
+                } else {
+                    return { enclosingType: parameter.type.typeName.getText()
+                             , enclosedTypes: parameter.type.typeArguments.map(serializeNestedType)
+                           };
+                }
+            default:
+                return nextType.getText();
+            }
+        }
     }
     /** Serialize a class symbol information */
     function serializeClass(symbol) {
@@ -146,7 +183,6 @@ function generateDocumentationForProgram(program) {
         details.constructors = constructorType
             .getConstructSignatures()
             .map(serializeSignature);
-        details.callSignatures = constructorType.getCallSignatures().map(serializeSignature);
         return details;
     }
     /** Serialize a signature (call or construct) */

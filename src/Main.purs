@@ -10,7 +10,7 @@ import Text.Typesript.Types.Generate
 main :: Effect Unit
 main = do
   log "🍝"
-  log $ generateDocumentationForInputString program
+  log $ generateDocumentationForInputString program2
 
 program = """
 import { Camera } from './Camera';
@@ -95,7 +95,7 @@ export class PerspectiveCamera extends Camera {
 	getFocalLength(): number;
 	getEffectiveFOV(): number;
 	getFilmWidth(): number;
-	getFilmHeight(): number;
+	getFilmHeight(): number [];
 
 	/**
 	 * Sets an offset in a larger frustum. This is useful for multi-window or multi-monitor/multi-machine setups.
@@ -155,5 +155,72 @@ export class PerspectiveCamera extends Camera {
 	 */
 	setLens( focalLength: number, frameHeight?: number ): void;
 
+}
+"""
+
+program1 = """
+import { Vector2 } from './Vector2';
+
+// Math //////////////////////////////////////////////////////////////////////////////////
+
+export class Box2 {
+
+	constructor( min?: Vector2, max?: Vector2, testArray: Vector2[] );
+
+	/**
+	 * @default new THREE.Vector2( + Infinity, + Infinity )
+	 */
+	min: Vector2;
+
+	/**
+	 * @default new THREE.Vector2( - Infinity, - Infinity )
+	 */
+	max: Vector2;
+
+	set( min: Vector2, max: Vector2 ): Box2;
+	setFromPoints( points: Vector2[] ): Box2;
+	setFromCenterAndSize( center: Vector2, size: Vector2 ): Box2;
+	clone(): this;
+	copy( box: Box2 ): this;
+	makeEmpty(): Box2;
+	isEmpty(): boolean;
+	getCenter( target: Vector2 ): Vector2;
+	getSize( target: Vector2 ): Vector2;
+	expandByPoint( point: Vector2 ): Box2;
+	expandByVector( vector: Vector2 ): Box2;
+	expandByScalar( scalar: number ): Box2;
+	containsPoint( point: Vector2 ): boolean;
+	containsBox( box: Box2 ): boolean;
+	getParameter( point: Vector2, target: Vector2 ): Vector2;
+	intersectsBox( box: Box2 ): boolean;
+	clampPoint( point: Vector2, target: Vector2 ): Vector2;
+	distanceToPoint( point: Vector2 ): number;
+	intersect( box: Box2 ): Box2;
+	union( box: Box2 ): Box2;
+	translate( offset: Vector2 ): Box2;
+	equals( box: Box2 ): boolean;
+	/**
+	 * @deprecated Use {@link Box2#isEmpty .isEmpty()} instead.
+	 */
+	empty(): any;
+	/**
+	 * @deprecated Use {@link Box2#intersectsBox .intersectsBox()} instead.
+	 */
+	isIntersectionBox( b: any ): any;
+
+}
+"""
+
+program2 = """
+import { Camera } from './Camera';
+
+export class PerspectiveCamera extends Camera {
+
+        constructor(name : Array<Animal<Dog>, Animal<Sheep>, number>, age: void);
+	setFocalLength( focalLength: Vector2 [], ocalLength: number [] ): void;
+	
+	setFocalLength2( focalLength: number ): number[];
+	setFocalLength3( focalLength: number ): Array<number, Vector2, boolean>;
+	setFocalLength4( focalLength: number ): number[][];
 }
 """
