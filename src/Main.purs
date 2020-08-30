@@ -1,22 +1,44 @@
 module Main where
 
+import Data.Argonaut
+import Data.Either
+import Data.Maybe
 import Prelude
+import Text.Typesript.Generate
 
 import Effect (Effect)
 import Effect.Console (log)
-import Text.Typesript.Types.SyntaxKind
-import Text.Typesript.Types.Generate
 
 main :: Effect Unit
 main = do
   log "🍝"
-  log $ generateDocumentationForInputString program
+  -- log $ generateDocumentationForInputString program
+  let parsed = tryParseSourceFile program
+  -- let stringed = encodeJson <$> parsed
+  -- let stringied2 = stringify <$> stringed
+  -- let hushed = hush stringied2
+  -- let maybed = fromMaybe "" hushed
+  log "test1"
+  -- log maybed
+  log "test2"
+  log $ either show identity $ stringify <$> encodeJson <$> tryParseSourceFile program
 
 program = """
 import { Camera } from './Camera';
 
-export function someFunc(type1: number, type2: Vector2, type3: Vector2[], type4: SomeClass<Type1>, type5: SomeClass2<Type2<Type3>>);
+export function someFunc(type1?: number, type2: Vector2, type3: Vector2[], type4: SomeClass<Type1>, type5: SomeClass2<Type2<Type3>>);
+export const enum DirectionExported {
+        Up,
+        Down,
+        Left,
+        Right
+    }
 
+export interface ReadonlyTextRange {
+    readonly pos: number;
+    readonly end: number;
+    readonly arrayValue: number[];
+}
 /**
  * Camera with perspective projection.
  *
