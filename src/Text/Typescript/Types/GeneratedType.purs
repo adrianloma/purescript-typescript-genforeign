@@ -25,15 +25,11 @@ type SourceFile =
 type TypeScriptClass =
   { name :: String
   , documentation :: String
-  , constructors :: Array Constructor
+  , constructors :: Array ClassConstructor
   , methods :: Array Method
   }
 
-type Constructor =
-  { parameters :: Array Parameter
-  , returnType :: String
-  , documentation :: String
-  }
+type ClassConstructor = TypeScriptFunction
 
 type Parameter =
   { name :: String
@@ -42,12 +38,7 @@ type Parameter =
   }
 
 
-type Method =
-  { name :: String
-  , documentation :: String
-  , typeScriptType :: TypeScriptType
-  , parameters :: Array Parameter
-  }
+type Method = TypeScriptFunction
 
 type Enum =
   { name :: String

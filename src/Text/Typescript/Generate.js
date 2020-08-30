@@ -124,8 +124,9 @@ function generateDocumentationForProgram(program) {
                 declarations = typeConstructor
                     .getConstructSignatures()
                     .map((constructor) => (
-                        { parameters: node.parameters.map(serializeParameterNode)
-                          , returnType: checker.typeToString(constructor.getReturnType())
+                        { name: checker.typeToString(constructor.getReturnType())
+                          , parameters: node.parameters.map(serializeParameterNode)
+                          , typeScriptType: checker.typeToString(constructor.getReturnType())
                           , documentation: ts.displayPartsToString(constructor.getDocumentationComment(checker))
                         }
                 ));
