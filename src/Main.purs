@@ -4,7 +4,8 @@ import Data.Argonaut
 import Data.Either
 import Data.Maybe
 import Prelude
-import Text.Typesript.Generate
+import Text.TypeScript.Parse
+import Text.TypeScript.GenForeign
 
 import Effect (Effect)
 import Effect.Console (log)
@@ -22,6 +23,7 @@ main = do
   -- log maybed
   log "test2"
   log $ either show identity $ stringify <$> encodeJson <$> tryParseSourceFile program
+  log $ either show identity $ genModulePs "three" <$> tryParseSourceFile program
 
 program = """
 import { Camera } from './Camera';

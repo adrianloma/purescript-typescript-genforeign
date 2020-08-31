@@ -10,6 +10,7 @@ You can edit this file as you like.
   , "argonaut-generic"
   , "console"
   , "effect"
+  , "foldable-traversable"
   , "generics-rep"
   , "integers"
   , "psci-support"
