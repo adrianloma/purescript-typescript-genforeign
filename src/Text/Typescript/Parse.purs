@@ -1,5 +1,4 @@
-module Text.TypeScript.Parse (module Text.TypeScript.Parse)
-       where
+module Text.TypeScript.Parse where
 
 
 
@@ -15,3 +14,7 @@ tryParseSourceFile sourceString =  do
                       let jsonToProcess = generateDocumentationForInputString sourceString
                       json <- parseJson jsonToProcess
                       decodeJson json
+
+--| Test documentation for `Test`
+--| Relates to `TSType`
+foreign import data Test :: Type

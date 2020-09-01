@@ -21,54 +21,31 @@ function generateDocumentationForInputStringAndOptions(inputString, options){
     const target = options.target | ts.ScriptTarget.ES5;
     const inputFileName = "module.ts";
     const sourceFile = ts.createSourceFile(inputFileName, inputString, target);
-    var compilerHost = {
-    getSourceFile: function getSourceFile(fileName) {
-        return fileName === ts.normalizePath(inputFileName) ? sourceFile : undefined;
-    },
-    writeFile: function writeFile(name, text) {
-        if (fileExtensionIs(name, ".map")) {
-        sourceMapText = text;
-        } else {
-        outputText = text;
-        }
-    },
-    getDefaultLibFileName: function getDefaultLibFileName() {
-        return "lib.d.ts";
-    },
-    useCaseSensitiveFileNames: function useCaseSensitiveFileNames() {
-        return false;
-    },
-    getCanonicalFileName: function getCanonicalFileName(fileName) {
-        return fileName;
-    },
-    getCurrentDirectory: function getCurrentDirectory() {
-        return "";
-    },
-    getNewLine: function getNewLine() {
-        return newLine;
-    },
-    fileExists: function fileExists(fileName) {
-        return fileName === inputFileName;
-    },
-    readFile: function readFile() {
-        return "";
-    },
-    directoryExists: function directoryExists() {
-        return true;
-    },
-    getDirectories: function getDirectories() {
-        return [];
-    }
-    };
+
+    var compilerHost =
+        { getSourceFile: ((fileName) =>  fileName === ts.normalizePath(inputFileName) ? sourceFile : undefined)
+          , writeFile: (
+              (name, text) =>
+                  (fileExtensionIs(name, ".map")) ?
+                  sourceMapText = text :
+                  outputText = text
+            )
+        , getDefaultLibFileName: (() => "lib.d.ts")
+        , useCaseSensitiveFileNames: (() =>  false)
+        , getCanonicalFileName: ((fileName) =>  fileName)
+        , getCurrentDirectory: (() =>  "")
+        , getNewLine: (() =>  newLine)
+        , fileExists: ((fileName) =>  fileName === inputFileName)
+        , readFile: (() =>  "")
+        , directoryExists: (() =>  true)
+        , getDirectories: (() =>  [])
+        };
 
     let program = ts.createProgram([inputFileName], options, compilerHost);
 
     return generateDocumentationForProgram(program);
 }
 
-function generateDocumentationForFilesAndOptions(fileNames, options){
-    generateDocumentationForFilesAndOptions(fileNames, options);
-}
 function generateDocumentationForFilesAndOptions(fileNames, options){
     // Build a program using the set of root file names in fileNames
     let program = ts.createProgram(fileNames, options);
@@ -199,6 +176,7 @@ function generateDocumentationForProgram(program) {
     /** Serialize a symbol into a json object */
     function serializeParameterNode(node) {
         let symbol = checker.getSymbolAtLocation(node.name);
+        console.log("param: " + symbol.getName() + "\ndocumentation: " + ts.displayPartsToString(symbol.getDocumentationComment(checker)));
         let serializedParam = {
             name: symbol.getName()
             , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))

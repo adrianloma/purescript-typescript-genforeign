@@ -1,6 +1,4 @@
-module Text.TypeScript.Type
-       (module Text.TypeScript.Type)
-       where
+module Text.TypeScript.Type where
 
 import Prelude
 

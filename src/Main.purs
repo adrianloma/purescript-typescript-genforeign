@@ -22,8 +22,9 @@ main = do
   log "test1"
   -- log maybed
   log "test2"
-  log $ either show identity $ stringify <$> encodeJson <$> tryParseSourceFile program
-  log $ either show identity $ genModulePs "three" <$> tryParseSourceFile program
+  -- log $ either show identity $ stringify <$> encodeJson <$> tryParseSourceFile program
+  log $ either show identity $ genJsModuleFromSourceFile "three" <$> tryParseSourceFile program
+  log $ either show identity $ genPsModuleFromSourceFile "three" <$> tryParseSourceFile program
 
 program = """
 import { Camera } from './Camera';
