@@ -88,7 +88,7 @@ function generateDocumentationForProgram(program) {
                 if(symbol.getName() === "toJSON") return;
                 if (symbol) {
                     let declarationDetails = serializeParameterNode(node);
-                    declarationDetails.parameters = node.parameters.map(serializeParameterNode);
+                    declarationDetails.params = node.parameters.map(serializeParameterNode);
                     declarations.push(declarationDetails);
                 }
             }
@@ -102,9 +102,9 @@ function generateDocumentationForProgram(program) {
                     .getConstructSignatures()
                     .map((constructor) => (
                         { name: checker.typeToString(constructor.getReturnType())
-                          , parameters: node.parameters.map(serializeParameterNode)
-                          , typeScriptType: checker.typeToString(constructor.getReturnType())
-                          , documentation: ts.displayPartsToString(constructor.getDocumentationComment(checker))
+                          , params: node.parameters.map(serializeParameterNode)
+                          , tsType: checker.typeToString(constructor.getReturnType())
+                          , docs: ts.displayPartsToString(constructor.getDocumentationComment(checker))
                         }
                 ));
             }
@@ -143,7 +143,7 @@ function generateDocumentationForProgram(program) {
         if (ts.isClassDeclaration(node) && node.name) {
             let serializedClass = {
                 name: symbol.getName()
-                , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))
+                , docs: ts.displayPartsToString(symbol.getDocumentationComment(checker))
                 , constructors: getSignatureForDeclarationKind(node, ts.SyntaxKind.Constructor)
                 , methods: getSignatureForDeclarationKind(node, ts.SyntaxKind.MethodDeclaration)
             };
@@ -151,11 +151,11 @@ function generateDocumentationForProgram(program) {
         } else if (ts.isFunctionDeclaration(node)){
            let serializedFunction = {
                 name: symbol.getName()
-                , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))
-                , parameters: node.parameters.map(serializeParameterNode)
+                , docs: ts.displayPartsToString(symbol.getDocumentationComment(checker))
+                , params: node.parameters.map(serializeParameterNode)
             };
             serializedFunction = serializeParameterNode(node);
-            serializedFunction.parameters = node.parameters.map(serializeParameterNode);
+            serializedFunction.params = node.parameters.map(serializeParameterNode);
 
             output.functions.push(serializedFunction);
         } else if (ts.isEnumDeclaration(node)){
@@ -176,15 +176,14 @@ function generateDocumentationForProgram(program) {
     /** Serialize a symbol into a json object */
     function serializeParameterNode(node) {
         let symbol = checker.getSymbolAtLocation(node.name);
-        console.log("param: " + symbol.getName() + "\ndocumentation: " + ts.displayPartsToString(symbol.getDocumentationComment(checker)));
         let serializedParam = {
             name: symbol.getName()
-            , documentation: ts.displayPartsToString(symbol.getDocumentationComment(checker))
-            , typeScriptType: serializeNestedType(node.type)
+            , docs: ts.displayPartsToString(symbol.getDocumentationComment(checker))
+            , tsType: serializeNestedType(node.type)
         };
         if(node.questionToken){
-            serializedParam.typeScriptType = { typeConstructor: "Maybe"
-                                               , typeParameters: serializedParam.typeScriptType
+            serializedParam.tsType = { typeConstructor: "Maybe"
+                                               , typeParams: serializedParam.tsType
                                              };
         }
         return serializedParam;
@@ -194,14 +193,14 @@ function generateDocumentationForProgram(program) {
             switch(nextType.kind){
             case ts.SyntaxKind.ArrayType:
                 return { typeConstructor: "Array"
-                         , typeParameters: serializeNestedType(nextType.elementType)
+                         , typeParams: serializeNestedType(nextType.elementType)
                        };
             case ts.SyntaxKind.TypeReference:
                 if(nextType.typeArguments === undefined){
                     return nextType.getText();
                 } else {
                     return { typeConstructor: nextType.typeName.getText()
-                             , typeParameters: nextType.typeArguments.map(serializeNestedType)
+                             , typeParams: nextType.typeArguments.map(serializeNestedType)
                            };
                 }
             default:

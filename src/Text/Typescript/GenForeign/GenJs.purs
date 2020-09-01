@@ -1,17 +1,12 @@
 module Text.TypeScript.GenForeign.GenJs where
 
-import Data.Argonaut
-import Data.Array
-import Data.Foldable hiding (length)
-import Data.Maybe
-import Data.Semigroup
+import Data.Array (cons)
+import Data.Foldable (foldMap, intercalate)
 import Prelude
-import Text.TypeScript.Type
+import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, SourceFile, TsFunction)
 
-import Data.Array.NonEmpty as NE
 
 type JsString = String
-type PsString = String
 
 _n :: String
 _n = "\n"
@@ -21,12 +16,12 @@ tab = "\t"
 
 -- Javascript source generation
 ----------------------------------------------------------------------------
-type JSForeignModule =
+type JsModule =
   { requiredModule :: String
-  , functions :: Array JSForeignFunction
+  , functions :: Array JsFunction
   }
 
-type JSForeignFunction =
+type JsFunction =
   { name :: String
   , outerParamNames :: Array String
   , innerParamNames :: Array String
@@ -34,8 +29,8 @@ type JSForeignFunction =
   }
 
 
-makeFFJs :: JSForeignFunction -> JsString
-makeFFJs func =
+jsFunctionToString :: JsFunction -> JsString
+jsFunctionToString func =
   "exports." <> func.name <> "Impl = function(" <> commas func.outerParamNames <> "){" <> _n <>
   tab <> "return " <> returnExpression <> ";" <> _n <>
   "}" <> _n
@@ -43,10 +38,10 @@ makeFFJs func =
     returnExpression = func.expressionPrefix <> func.name <> "(" <> commas func.innerParamNames <> ")"
     commas = intercalate ", "
 
-constructorToFF :: ClassConstructor -> JSForeignFunction
-constructorToFF tsCons =
+tsConstructorToJsFunction :: ClassConstructor -> JsFunction
+tsConstructorToJsFunction tsCons =
   let
-    paramNames = (map _.name tsCons.parameters)
+    paramNames = (map _.name tsCons.params)
   in
   { name: "constructor" <> tsCons.name
   , outerParamNames: paramNames
@@ -54,10 +49,10 @@ constructorToFF tsCons =
   , expressionPrefix: "new sourceModule."
   }
 
-methodToFF :: ClassMethod -> JSForeignFunction
-methodToFF tsMethod =
+tsMethodToJsFunction :: ClassMethod -> JsFunction
+tsMethodToJsFunction tsMethod =
   let
-    paramNames = (map _.name tsMethod.parameters)
+    paramNames = (map _.name tsMethod.params)
   in
   { name: tsMethod.name
   , outerParamNames: cons "classInstance" paramNames
@@ -65,10 +60,10 @@ methodToFF tsMethod =
   , expressionPrefix: "classInstance."
   }
 
-tsFunctionToFF :: TSFunction -> JSForeignFunction
-tsFunctionToFF tsFunc =
+tsFunctionToJsFunction :: TsFunction -> JsFunction
+tsFunctionToJsFunction tsFunc =
   let
-    paramNames = (map _.name tsFunc.parameters)
+    paramNames = (map _.name tsFunc.params)
   in
   { name: tsFunc.name
   , outerParamNames: paramNames
@@ -76,27 +71,25 @@ tsFunctionToFF tsFunc =
   , expressionPrefix: "sourceModule."
   }
 
-tsClassToFF :: Class -> Array JSForeignFunction
-tsClassToFF tsClass =
-  (map methodToFF tsClass.methods) <>
-  (map constructorToFF tsClass.constructors)
+tsClassToJsFunctions :: Class -> Array JsFunction
+tsClassToJsFunctions tsClass =
+  (map tsMethodToJsFunction tsClass.methods) <>
+  (map tsConstructorToJsFunction tsClass.constructors)
 
-sourceFileToFModule :: String -> SourceFile -> JSForeignModule
-sourceFileToFModule requiredModule sourceFile =
+tsSourceModuleToJsModule :: String -> SourceFile -> JsModule
+tsSourceModuleToJsModule requiredModule sourceFile =
   { requiredModule: requiredModule
-  , functions: foldMap tsClassToFF sourceFile.classes <>
-                map tsFunctionToFF sourceFile.functions
+  , functions: foldMap tsClassToJsFunctions sourceFile.classes <>
+                map tsFunctionToJsFunction sourceFile.functions
   }
 
-genModuleJs :: JSForeignModule -> JsString
-genModuleJs fm =
+jsModuleToString :: JsModule -> JsString
+jsModuleToString fm =
   useStrict <> _n <> _n <>
   requires <> _n <> _n <>
   functions <> _n
    where
      useStrict = "'use strict';"
      requires = "const sourceModule = require('" <> fm.requiredModule <> "');"
-     functions = foldMap makeFFJs fm.functions
+     functions = foldMap jsFunctionToString fm.functions
 
-genJsModuleFromSourceFile :: String -> SourceFile -> JsString
-genJsModuleFromSourceFile sourceOrigin sourceFile = genModuleJs $ sourceFileToFModule sourceOrigin sourceFile

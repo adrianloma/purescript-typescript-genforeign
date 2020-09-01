@@ -1,24 +1,18 @@
 module Text.TypeScript.GenForeign.GenPs where
 
-import Data.Argonaut
-import Data.Array
-import Data.Foldable hiding (length)
-import Data.Maybe
-import Data.Semigroup
 import Prelude
-import Text.TypeScript.Type
 
+import Data.Array (uncons)
 import Data.Array.NonEmpty as NE
-import Data.String (Pattern(..), Replacement(..), length, null)
-import Data.String (replaceAll)
+import Data.Foldable (foldMap, intercalate, surroundMap)
+import Data.Maybe (Maybe(..))
+import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null)
+import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, PrimitiveTsType(..), SourceFile, TsFunction, TsType(..), TypeParam(..), ConstructorType)
 
-type JsString = String
 type PsString = String
 
 _n :: String
 _n = "\n"
-tab :: String
-tab = "\t"
 
 
 -- Purescript source generation
@@ -28,77 +22,78 @@ type PsFunction =
   { name :: String
   , typeDeclPrefix :: String
   , types :: NE.NonEmptyArray String
-  , documentation :: String
+  , docs :: String
   }
 
 type PsForeignData =
   { name :: String
-  , documentation :: String
+  , docs :: String
   , psType :: String
   }
 
-type PSFfiModule =
+type PsModule =
   { name :: String
   , imports :: Array String
   , functions :: Array PsFunction
   , foreignData :: Array PsForeignData
   }
 
-genPsModuleFromSourceFile :: String -> SourceFile -> PsString
-genPsModuleFromSourceFile moduleName sourceFile = genModulePs $ sourceFileToModulePs moduleName sourceFile
 
-sourceFileToModulePs :: String -> SourceFile -> PSFfiModule
-sourceFileToModulePs moduleName sourceFile =
+tsSourceFileToPsModule :: String -> SourceFile -> PsModule
+tsSourceFileToPsModule moduleName sourceFile =
   { name: moduleName
   , imports:  ["import Foreign", "import Data.Function.Uncurried"]
-  , functions: foldMap classToPs sourceFile.classes <>
-                map functionToPs sourceFile.functions
-  , foreignData: map classToPsForeignData sourceFile.classes
+  , functions: foldMap tsClassToPsFunctions sourceFile.classes <>
+                map tsFunctionToPsFunction sourceFile.functions
+  , foreignData: map tsClassToPsForeignData sourceFile.classes
   }
 
-classToPsForeignData :: Class -> PsForeignData
-classToPsForeignData tsClass =
+tsClassToPsForeignData :: Class -> PsForeignData
+tsClassToPsForeignData tsClass =
   { name: tsClass.name
-  , documentation: tsDocumentationToPs tsClass.documentation
+  , docs: tsDocsToString tsClass.docs
   , psType : "Type"
   }
 
-methodToPs :: Class -> ClassMethod -> PsFunction
-methodToPs tsClass tsMethod =
+tsMethodToPsFunction :: Class -> ClassMethod -> PsFunction
+tsMethodToPsFunction tsClass tsMethod =
   let
-   methodPs = functionToPs tsMethod
+   methodPs = tsFunctionToPsFunction tsMethod
   in
    methodPs {types = NE.cons tsClass.name methodPs.types}
 
-constructorToPs :: Class -> ClassConstructor -> PsFunction
-constructorToPs tsClass tsConstructor =
+tsConstructorToPsFunction :: Class -> ClassConstructor -> PsFunction
+tsConstructorToPsFunction tsClass tsConstructor =
   let
-   constructorPs = functionToPs tsConstructor
+   constructorPs = tsFunctionToPsFunction tsConstructor
   in
    constructorPs { name = "constructor" <> constructorPs.name
                  , types = NE.snoc constructorPs.types tsClass.name
                  }
 
-functionToPs :: TSFunction -> PsFunction
-functionToPs tsFunc =
+tsFunctionToPsFunction :: TsFunction -> PsFunction
+tsFunctionToPsFunction tsFunc =
   { name: tsFunc.name
   , typeDeclPrefix: ""
-  , types: convertTsTypesToPsTypes $ map (_.typeScriptType) tsFunc.parameters
-  , documentation: tsDocumentationToPs $ tsFunc.documentation <> surroundMap _n getParamDocs tsFunc.parameters
+  , types: tsTypesToStrings $ map (_.tsType) tsFunc.params
+  , docs: tsDocsToString $ tsFunc.docs <> surroundMap _n getParamDocs tsFunc.params
   }
   where
-   getParamDocs param = "Parameter" <> ": `" <> param.name <> "`" <>
-                        (if null param.documentation then "" else ": " ) <> param.documentation 
+   getParamDocs param = "Param" <> ": `" <> param.name <> "`" <>
+                        (if null param.docs then "" else ": " ) <> param.docs 
 
 
-classToPs :: Class -> Array PsFunction
-classToPs tsClass =
-  map (methodToPs tsClass) tsClass.methods <>
-  map (constructorToPs tsClass) tsClass.constructors
+tsClassToPsFunctions :: Class -> Array PsFunction
+tsClassToPsFunctions tsClass =
+  map (tsMethodToPsFunction tsClass) tsClass.methods <>
+  map (tsConstructorToPsFunction tsClass) tsClass.constructors
 
+{--
+ Ps* -> String
+--}
 
-genModulePs :: PSFfiModule -> PsString
-genModulePs psModule =
+psModuleToString :: PsModule -> PsString
+psModuleToString psModule =
   "module " <> psModule.name <> _n <>
   "  ( " <> exports <> "\n  )" <> _n <>
   "  where" <> _n <> _n <>
@@ -108,17 +103,17 @@ genModulePs psModule =
   foreignData <> _n
   where
     exports = intercalate "\n  , " $ map _.name psModule.functions
-    foreignFunctionsImports = foldMap genImportFunctionPs psModule.functions
-    runFunctions = intercalate _n $ map genRunFunctionPs psModule.functions
+    foreignFunctionsImports = foldMap psFunctionToImportString psModule.functions
+    runFunctions = intercalate _n $ map psFunctionToRunFunctionString psModule.functions
     foreignData = foldMap psForeignDataToString psModule.foreignData
 
 psForeignDataToString :: PsForeignData -> PsString
 psForeignDataToString psData =
-  psData.documentation <> _n <>
+  psData.docs <> _n <>
   "foreign import data " <> psData.name <> " :: " <> psData.psType
 
-genImportFunctionPs :: PsFunction -> PsString
-genImportFunctionPs func =
+psFunctionToImportString :: PsFunction -> PsString
+psFunctionToImportString func =
   funcDecl <> typeDeclPrefix <> functionConstructor <> types <> _n
   where
     funcDecl = "foreign import " <> func.name <> "Impl"
@@ -126,45 +121,53 @@ genImportFunctionPs func =
     functionConstructor = "Fn" <> (show $ (NE.length func.types) - 1) <> " "
     types = intercalate " " func.types
 
-genRunFunctionPs :: PsFunction -> PsString
-genRunFunctionPs func =
-  func.documentation <> _n <>
+psFunctionToRunFunctionString :: PsFunction -> PsString
+psFunctionToRunFunctionString func =
+  func.docs <> _n <>
   func.name <> " :: " <> func.typeDeclPrefix <> types <> _n <>
   func.name <> " = " <> runFn <> " " <> func.name <> "Impl" <> _n
   where
     types = intercalate " -> " func.types
     runFn = "runFn" <> (show $ (NE.length func.types) - 1)
 
-convertTsTypesToPsTypes :: Array TSType -> NE.NonEmptyArray String
-convertTsTypesToPsTypes types = case uncons types of
-  Just { head: x, tail: xs } -> map tsTypeToPsType $ NE.appendArray (NE.singleton x) xs
-  Nothing -> map tsTypeToPsType $ NE.singleton (PrimitiveType TSVoid)
+{--
+Ts components to string
+--}
+tsTypesToStrings :: Array TsType -> NE.NonEmptyArray String
+tsTypesToStrings types = case uncons types of
+  Just { head: x, tail: xs } -> map tsTypeToString $ NE.appendArray (NE.singleton x) xs
+  Nothing -> map tsTypeToString $ NE.singleton (PrimitiveType TsVoid)
 
-tsTypeToPsType :: TSType -> PsString
-tsTypeToPsType = case _ of
-  (CompositeType a) -> tsConstructorTypeToPs a
-  (PrimitiveType a) -> tsPrimitiveTypeToPs a
+tsTypeToString :: TsType -> PsString
+tsTypeToString = case _ of
+  (CompositeType a) -> tsConstructorTypeToString a
+  (PrimitiveType a) -> tsPrimitiveTypeToString a
   (TypeReference a) -> a
 
-tsConstructorTypeToPs a = "(" <> a.typeConstructor <> " " <> tsTypeParameterToPs a.typeParameters <> ")"
+tsConstructorTypeToString :: ConstructorType -> String
+tsConstructorTypeToString tsType = "(" <> tsType.typeConstructor <> " " <> tsTypeParamToString tsType.typeParams <> ")"
 
-tsTypeParameterToPs = case _ of
-  (SingletonTypeParameter b) -> tsTypeToPsType b
-  (ArrayTypeParameters b) -> intercalate " " $ map tsTypeToPsType b
+tsTypeParamToString :: TypeParam -> String
+tsTypeParamToString = case _ of
+  (SingletonTypeParam b) -> tsTypeToString b
+  (ArrayTypeParams b) -> intercalate " " $ map tsTypeToString b
 
-tsPrimitiveTypeToPs = case _ of
-    TSAny   -> "Foreign"
-    TSNumber   -> "Number"
-    TSVoid   ->  "Unit"
-    TSString   -> "String"
-    TSUndefined -> "Unit"
-    TSObject -> "Foreign"
-    TSBoolean -> "Boolean"
+tsPrimitiveTypeToString :: PrimitiveTsType -> String
+tsPrimitiveTypeToString = case _ of
+    TsAny   -> "Foreign"
+    TsNumber   -> "Number"
+    TsVoid   ->  "Unit"
+    TsString   -> "String"
+    TsUndefined -> "Unit"
+    TsObject -> "Foreign"
+    TsBoolean -> "Boolean"
 
-tsDocumentationToPs :: String -> String
-tsDocumentationToPs = 
-  filter3 <<< filter2 <<< filter1
+tsDocsToString :: String -> String
+tsDocsToString =
+  filter4 <<< filter3 <<< filter2 <<< filter1 <<< trim
   where
     filter1 = append "--| "
     filter2 = replaceAll (Pattern "\n") (Replacement "\n--| ")
     filter3 = replaceAll (Pattern "--| \n") (Replacement "")
+    filter4 = \str -> if (length str < 5) then "" else str
+

@@ -3,17 +3,16 @@ module Text.TypeScript.Type where
 import Prelude
 
 import Control.Alternative ((<|>))
-import Data.Argonaut.Core as RAC
-import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson, (.:))
+import Data.Argonaut.Decode (class DecodeJson, JsonDecodeError(..), decodeJson)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Argonaut.Encode.Generic.Rep (genericEncodeJson)
 import Data.Bifunctor (lmap)
-import Data.Either (note, Either(..), hush)
+import Data.Either (note)
 import Data.Generic.Rep (class Generic)
 import Data.Maybe (Maybe(..))
 
 type SourceFile =
-  { functions :: Array TSFunction
+  { functions :: Array TsFunction
   , classes :: Array Class
   , enums :: Array Enum
   , interfaces :: Array Interface
@@ -21,15 +20,15 @@ type SourceFile =
 
 type Class =
   { name :: String
-  , documentation :: String
+  , docs :: String
   , constructors :: Array ClassConstructor
   , methods :: Array ClassMethod
   }
 
-type Parameter =
+type Param =
   { name :: String
-  , documentation :: String
-  , typeScriptType :: TSType
+  , docs :: String
+  , tsType :: TsType
   }
 
 type Enum =
@@ -39,84 +38,84 @@ type Enum =
 
 type Interface =
   { name :: String
-  , properties :: Array Parameter
+  , properties :: Array Param
   }
 
-type ClassMethod = TSFunction
-type ClassConstructor = TSFunction
-type TSFunction =
+type ClassMethod = TsFunction
+type ClassConstructor = TsFunction
+type TsFunction =
   { name :: String
-  , documentation :: String
-  , parameters :: Array Parameter
-  , typeScriptType :: TSType
+  , docs :: String
+  , params :: Array Param
+  , tsType :: TsType
   }
 
 type ConstructorType =
   { typeConstructor :: String
-  , typeParameters :: TypeParameter
+  , typeParams :: TypeParam
   }
 
-data TypeParameter =
-  SingletonTypeParameter TSType
-  | ArrayTypeParameters (Array TSType)
+data TypeParam =
+  SingletonTypeParam TsType
+  | ArrayTypeParams (Array TsType)
 
-data TSType =
+data TsType =
   CompositeType ConstructorType
-  | PrimitiveType PrimitiveTSType
+  | PrimitiveType PrimitiveTsType
   | TypeReference String
 
-data PrimitiveTSType =
-    TSAny
-  | TSNumber
-  | TSVoid
-  | TSString
-  | TSUndefined
-  | TSObject
-  | TSBoolean
-  -- | TSBigInt -- No support
+data PrimitiveTsType =
+    TsAny
+  | TsNumber
+  | TsVoid
+  | TsString
+  | TsUndefined
+  | TsObject
+  | TsBoolean
+  -- | TsBigInt -- No support
 
 
-derive instance genericTypeParameter :: Generic TypeParameter _
-instance encodeJsonTypeParameter :: EncodeJson TypeParameter where
+derive instance genericTypeParam :: Generic TypeParam _
+instance encodeJsonTypeParam :: EncodeJson TypeParam where
   encodeJson wt = case wt of
-    (SingletonTypeParameter val) -> encodeJson val
-    (ArrayTypeParameters val) -> encodeJson val
+    (SingletonTypeParam val) -> encodeJson val
+    (ArrayTypeParams val) -> encodeJson val
 
-derive instance genericTSType :: Generic TSType _
-instance encodeJsonTSType :: EncodeJson TSType where
+derive instance genericTsType :: Generic TsType _
+instance encodeJsonTsType :: EncodeJson TsType where
   encodeJson = genericEncodeJson
 
-derive instance genericPrimitiveTSType :: Generic PrimitiveTSType _
-instance encodeJsonPrimitiveTSType :: EncodeJson PrimitiveTSType where
+derive instance genericPrimitiveTsType :: Generic PrimitiveTsType _
+instance encodeJsonPrimitiveTsType :: EncodeJson PrimitiveTsType where
   encodeJson = genericEncodeJson
 
 
-instance decodeJsonTSType :: DecodeJson TSType where
+instance decodeJsonTsType :: DecodeJson TsType where
   decodeJson json = do
     obj <- decodeJson json
-    lmap (const $ TypeMismatch "TSType") $
+    lmap (const $ TypeMismatch "TsType") $
           PrimitiveType <$> decodeJson obj
       <|> TypeReference <$> decodeJson obj
       <|> CompositeType <$> decodeJson obj
 
-instance decodeJsonTypeParameter :: DecodeJson TypeParameter where
+instance decodeJsonTypeParam :: DecodeJson TypeParam where
   decodeJson json = do
     obj <- decodeJson json
-    lmap (const $ TypeMismatch "TypeParameter") $
-          SingletonTypeParameter <$> decodeJson obj
-      <|> ArrayTypeParameters <$> decodeJson obj
+    lmap (const $ TypeMismatch "TypeParam") $
+          SingletonTypeParam <$> decodeJson obj
+      <|> ArrayTypeParams <$> decodeJson obj
 
-instance decodeJsonPrimitiveTSType :: DecodeJson PrimitiveTSType where
+instance decodeJsonPrimitiveTsType :: DecodeJson PrimitiveTsType where
   decodeJson json = do
     obj <- decodeJson json
-    note (TypeMismatch "PrimitiveTSType") (decodePrimitiveType obj)
+    note (TypeMismatch "PrimitiveTsType") (decodePrimitiveType obj)
     where
       decodePrimitiveType a = case a of
-        "any" -> Just TSAny
-        "number" -> Just TSNumber
-        "void" -> Just TSVoid
-        "string" -> Just TSString
-        "undefined" -> Just TSUndefined
-        "object" -> Just TSObject
-        "boolean" -> Just TSBoolean
+        "any" -> Just TsAny
+        "number" -> Just TsNumber
+        "void" -> Just TsVoid
+        "string" -> Just TsString
+        "undefined" -> Just TsUndefined
+        "object" -> Just TsObject
+        "boolean" -> Just TsBoolean
         _       -> Nothing
