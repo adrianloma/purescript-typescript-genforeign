@@ -1,7 +1,5 @@
 module Text.TypeScript.Parse where
 
-
-
 import Data.Argonaut.Decode (JsonDecodeError, decodeJson, parseJson)
 import Data.Either (Either)
 import Prelude
