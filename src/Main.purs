@@ -13,15 +13,7 @@ import Effect.Console (log)
 main :: Effect Unit
 main = do
   log "🍝"
-  -- log $ generateDocumentationForInputString program
   let parsed = tryParseSourceFile program
-  -- let stringed = encodeJson <$> parsed
-  -- let stringied2 = stringify <$> stringed
-  -- let hushed = hush stringied2
-  -- let maybed = fromMaybe "" hushed
-  log "test1"
-  -- log maybed
-  log "test2"
   -- log $ either show identity $ stringify <$> encodeJson <$> tryParseSourceFile program
   log $ either show identity $ tsSourceFileToJsModuleString "three" <$> tryParseSourceFile program
   log $ either show identity $ tsSourceFileToPsModuleString "three" <$> tryParseSourceFile program

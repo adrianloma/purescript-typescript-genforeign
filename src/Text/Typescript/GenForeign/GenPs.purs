@@ -89,7 +89,7 @@ tsFunctionToPsFunction :: TsFunction -> PsFunction
 tsFunctionToPsFunction tsFunc =
   { name: tsFunc.name
   , typeDeclPrefix: ""
-  , types: tsTypesToStrings $ map (_.tsType) tsFunc.params
+  , types: tsTypesToStrings $ map (_.tsType) tsFunc.params <> [tsFunc.tsType]
   , docs: tsDocsToString $ tsFunc.docs <> surroundMap _n getParamDocs tsFunc.params
   }
   where
