@@ -1,4 +1,66 @@
-module Text.TypeScript.GenForeign.GenPs where
+-- | Similar to how the GenJs module functions, this module works by turning a `SourceFile`
+-- | into an "intermediate representation", namely `PsModule`, `PsFunction`, `PsForeignData`,
+-- | and `PsType`. `PsModule` contains all the intermediate representations and once converted
+-- | to string, will be a PureScript module.
+-- | The flow of `SourceFile` to a String that contains the PureScript module is roughly as follows:
+-- | ```
+-- | SourceFile -> tsSourceFileToPsModule -> PsModule -> psModuleToString -> String
+-- | in wich tsSourceFileToPsModule internally calls
+-- | tsClassToPsFunctions -> PsFunction
+-- | tsMethodToPsFunction -> PsFunction
+-- | tsClassToPsForeignData -> PsForeignData
+-- | ...[the rest of the ts*ToPs* functions]
+-- | and psModuleToString internally calls
+-- | psForeignDataToString -> String
+-- | psFunctionToImportString -> String
+-- | ... [the rest of the ps*To*String functions]
+-- | ```
+-- | This means that to plug in and create changes in the intermediate step, you use the `ts*ToPs*`
+-- | functions, make modifications, and then call the `ps*To*String` functions.
+-- | ## Example
+-- | This function uses the `changeFuncReturnTypeWith` function to add `Effect` to the last type
+-- | of all functions in the PsModule. Replacing `func :: Int -> Int` into `func :: Int -> Effect Int`
+-- | ```purescript
+-- | sourceToString :: String -> SourceFile -> String
+-- | sourceToString moduleName sourceFile =
+-- |   psModuleToString $ -- Finally, convert PsModule to String
+-- |   changeFuncReturnTypeWith (\str -> "Effect " <> str) $ -- Then apply transformations to PsModule
+-- |   tsSourceFileToPsModule moduleName sourceFile -- First, SourceFile -> PsModule
+-- |
+-- | type PsModuleFilter = PsModule -> PsModule
+-- | changeFuncReturnTypeWith :: (String -> String) -> PsModuleFilter
+-- | changeFuncReturnTypeWith stringTransform = \psModule ->
+-- |   psModule {functions = map changeReturnType psModule.functions}
+-- |   where
+-- |     transformLast { init: init, last: last } = NE.snoc' init (stringTransform last)
+-- |     changeReturnType func = func {types = transformLast $ NE.unsnoc func.types}
+-- | ```
+-- | Likewise, you are free to change the type names, add functions to the PsModule, remove data types, etc.
+module Text.TypeScript.GenForeign.GenPs
+       ( PsFunction
+       , PsForeignData
+       , PsModule
+       , PsType
+       , tsSourceFileToPsModule
+       , tsInterfaceToPsType
+       , tsClassToPsForeignData
+       , tsMethodToPsFunction
+       , tsConstructorToPsFunction
+       , tsFunctionToPsFunction
+       , tsClassToPsFunctions
+       , psModuleToString
+       , psTypeToString
+       , psForeignDataToString
+       , psFunctionToImportString
+       , psFunctionToRunFunctionString
+       , tsTypesToStrings
+       , tsTypeToString
+       , tsConstructorTypeToString
+       , tsTypeParamToString
+       , tsPrimitiveTypeToString
+       , tsDocsToString
+       )
+       where
 
 import Prelude
 
@@ -9,7 +71,6 @@ import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null)
 import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, ConstructorType, PrimitiveTsType(..), SourceFile, TsFunction, TsType(..), TypeParam(..), Interface)
 
-type PsString = String
 
 _n :: String
 _n = "\n"
@@ -39,6 +100,11 @@ type PsModule =
   , interfaces :: Array PsType
   }
 
+type PsType = { name :: String
+              , fields :: Array { name :: String
+                                , psType :: String
+                                }
+              }
 
 tsSourceFileToPsModule :: String -> SourceFile -> PsModule
 tsSourceFileToPsModule moduleName sourceFile =
@@ -55,12 +121,6 @@ tsInterfaceToPsType tsInterface =
   { name: tsInterface.name
   , fields: map (\param -> {name: param.name, psType: tsTypeToString param.tsType}) tsInterface.properties
   }
-type PsType = { name :: String
-              , fields :: Array { name :: String
-                                , psType :: String
-                                }
-              }
-
 
 tsClassToPsForeignData :: Class -> PsForeignData
 tsClassToPsForeignData tsClass =
@@ -106,7 +166,7 @@ tsClassToPsFunctions tsClass =
  Ps* -> String
 --}
 
-psModuleToString :: PsModule -> PsString
+psModuleToString :: PsModule -> String
 psModuleToString psModule =
   "module " <> psModule.name <> _n <>
   "  ( " <> exports <> "\n  )" <> _n <>
@@ -133,12 +193,12 @@ psTypeToString psType =
   where
     fieldToString field = field.name <> " :: " <> field.psType
 
-psForeignDataToString :: PsForeignData -> PsString
+psForeignDataToString :: PsForeignData -> String
 psForeignDataToString psData =
   psData.docs <> _n <>
   "foreign import data " <> psData.name <> " :: " <> psData.psType
 
-psFunctionToImportString :: PsFunction -> PsString
+psFunctionToImportString :: PsFunction -> String
 psFunctionToImportString func =
   funcDecl <> typeDeclPrefix <> functionConstructor <> types <> _n
   where
@@ -147,7 +207,7 @@ psFunctionToImportString func =
     functionConstructor = "Fn" <> (show $ (NE.length func.types) - 1) <> " "
     types = intercalate " " func.types
 
-psFunctionToRunFunctionString :: PsFunction -> PsString
+psFunctionToRunFunctionString :: PsFunction -> String
 psFunctionToRunFunctionString func =
   func.docs <> _n <>
   func.name <> " :: " <> func.typeDeclPrefix <> types <> _n <>
@@ -164,7 +224,7 @@ tsTypesToStrings types = case uncons types of
   Just { head: x, tail: xs } -> map tsTypeToString $ NE.appendArray (NE.singleton x) xs
   Nothing -> map tsTypeToString $ NE.singleton (PrimitiveType TsVoid)
 
-tsTypeToString :: TsType -> PsString
+tsTypeToString :: TsType -> String
 tsTypeToString = case _ of
   (CompositeType a) -> tsConstructorTypeToString a
   (PrimitiveType a) -> tsPrimitiveTypeToString a
