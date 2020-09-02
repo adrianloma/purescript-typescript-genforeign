@@ -22,7 +22,8 @@ type JsModule =
   }
 
 type JsFunction =
-  { name :: String
+  { outerFuncName :: String
+  , innerFuncName :: String
   , outerParamNames :: Array String
   , innerParamNames :: Array String
   , expressionPrefix :: String
@@ -31,11 +32,11 @@ type JsFunction =
 
 jsFunctionToString :: JsFunction -> JsString
 jsFunctionToString func =
-  "exports." <> func.name <> "Impl = function(" <> commas func.outerParamNames <> "){" <> _n <>
+  "exports." <> func.outerFuncName <> " = function(" <> commas func.outerParamNames <> "){" <> _n <>
   tab <> "return " <> returnExpression <> ";" <> _n <>
   "}" <> _n
   where
-    returnExpression = func.expressionPrefix <> func.name <> "(" <> commas func.innerParamNames <> ")"
+    returnExpression = func.expressionPrefix <> func.innerFuncName <> "(" <> commas func.innerParamNames <> ")"
     commas = intercalate ", "
 
 tsConstructorToJsFunction :: ClassConstructor -> JsFunction
@@ -43,7 +44,8 @@ tsConstructorToJsFunction tsCons =
   let
     paramNames = (map _.name tsCons.params)
   in
-  { name: "constructor" <> tsCons.name
+  { outerFuncName: "constructor" <> tsCons.name <> "Impl"
+  , innerFuncName: tsCons.name
   , outerParamNames: paramNames
   , innerParamNames: paramNames
   , expressionPrefix: "new sourceModule."
@@ -54,7 +56,8 @@ tsMethodToJsFunction tsMethod =
   let
     paramNames = (map _.name tsMethod.params)
   in
-  { name: tsMethod.name
+  { outerFuncName: tsMethod.name <> "Impl"
+  , innerFuncName: tsMethod.name
   , outerParamNames: cons "classInstance" paramNames
   , innerParamNames: paramNames
   , expressionPrefix: "classInstance."
@@ -65,7 +68,8 @@ tsFunctionToJsFunction tsFunc =
   let
     paramNames = (map _.name tsFunc.params)
   in
-  { name: tsFunc.name
+  { outerFuncName: tsFunc.name <> "Impl"
+  , innerFuncName: tsFunc.name
   , outerParamNames: paramNames
   , innerParamNames: paramNames
   , expressionPrefix: "sourceModule."
