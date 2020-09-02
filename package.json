@@ -1,11 +1,15 @@
 {
-  "name": "purescript-typescript-parser",
+  "name": "purescript-typescript-genforeign",
   "version": "0.1.0",
-  "description": "A set of functions for working with typescript in purescript.",
-  "main": "index.js",
+  "description": "A set of functions for parsing TypeScript declaration files (*.d.ts) and generating PureScript code from it.",
   "author": "adrianloma",
   "license": "MIT",
   "dependencies": {
     "typescript": "^4.0.2"
+  },
+  "scripts": {
+      "build" : "spago build",
+      "buildDocs": "spago docs",
+      "getDependencies": "yarn install; spago install;"
   }
 }

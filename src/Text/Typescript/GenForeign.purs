@@ -55,6 +55,7 @@ module Text.TypeScript.GenForeign
       , tsSourceFileToPsModuleString
       , changeFuncReturnTypeWith
       , module Gen
+      , module Parse
       )
        where
 
