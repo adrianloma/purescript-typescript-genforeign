@@ -7,7 +7,7 @@ import Data.Array.NonEmpty as NE
 import Data.Foldable (foldMap, intercalate, surroundMap)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null)
-import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, PrimitiveTsType(..), SourceFile, TsFunction, TsType(..), TypeParam(..), ConstructorType)
+import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, ConstructorType, PrimitiveTsType(..), SourceFile, TsFunction, TsType(..), TypeParam(..), Interface)
 
 type PsString = String
 
@@ -36,6 +36,7 @@ type PsModule =
   , imports :: Array String
   , functions :: Array PsFunction
   , foreignData :: Array PsForeignData
+  , interfaces :: Array PsType
   }
 
 
@@ -46,7 +47,20 @@ tsSourceFileToPsModule moduleName sourceFile =
   , functions: foldMap tsClassToPsFunctions sourceFile.classes <>
                 map tsFunctionToPsFunction sourceFile.functions
   , foreignData: map tsClassToPsForeignData sourceFile.classes
+  , interfaces : map tsInterfaceToPsType sourceFile.interfaces
   }
+
+tsInterfaceToPsType :: Interface -> PsType
+tsInterfaceToPsType tsInterface =
+  { name: tsInterface.name
+  , fields: map (\param -> {name: param.name, psType: tsTypeToString param.tsType}) tsInterface.properties
+  }
+type PsType = { name :: String
+              , fields :: Array { name :: String
+                                , psType :: String
+                                }
+              }
+
 
 tsClassToPsForeignData :: Class -> PsForeignData
 tsClassToPsForeignData tsClass =
@@ -100,12 +114,24 @@ psModuleToString psModule =
   intercalate _n psModule.imports <> _n <> _n <>
   foreignFunctionsImports <> _n <>
   runFunctions <> _n <>
-  foreignData <> _n
+  foreignData <> _n <>
+  interfaces <> _n
   where
-    exports = intercalate "\n  , " $ map _.name psModule.functions
+    exports = intercalate "\n  , " $
+              map _.name psModule.functions <>
+              map _.name psModule.foreignData <>
+              map _.name psModule.interfaces
     foreignFunctionsImports = foldMap psFunctionToImportString psModule.functions
     runFunctions = intercalate _n $ map psFunctionToRunFunctionString psModule.functions
-    foreignData = foldMap psForeignDataToString psModule.foreignData
+    foreignData = surroundMap _n psForeignDataToString psModule.foreignData
+    interfaces = foldMap psTypeToString psModule.interfaces
+
+psTypeToString :: PsType -> String
+psTypeToString psType =
+  "type " <> psType.name <> " =\n" <>
+  "  { " <> intercalate "\n  , " (map fieldToString psType.fields) <> "\n  }"
+  where
+    fieldToString field = field.name <> " :: " <> field.psType
 
 psForeignDataToString :: PsForeignData -> PsString
 psForeignDataToString psData =
