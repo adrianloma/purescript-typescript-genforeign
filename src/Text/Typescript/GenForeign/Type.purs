@@ -94,9 +94,9 @@ instance decodeJsonTsType :: DecodeJson TsType where
   decodeJson json = do
     obj <- decodeJson json
     lmap (const $ TypeMismatch "TsType") $
-          PrimitiveType <$> decodeJson obj
+          CompositeType <$> decodeJson obj
+      <|> PrimitiveType <$> decodeJson obj
       <|> TypeReference <$> decodeJson obj
-      <|> CompositeType <$> decodeJson obj
 
 instance decodeJsonTypeParam :: DecodeJson TypeParam where
   decodeJson json = do

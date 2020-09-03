@@ -78,7 +78,7 @@ jsFunctionToString :: JsFunction -> String
 jsFunctionToString func =
   "exports." <> func.outerFuncName <> " = function(" <> commas func.outerParamNames <> "){" <> _n <>
   tab <> "return " <> returnExpression <> ";" <> _n <>
-  "}" <> _n
+  "};" <> _n
   where
     returnExpression = func.expressionPrefix <> func.innerFuncName <> "(" <> commas func.innerParamNames <> ")"
     commas = intercalate ", "

@@ -54,6 +54,8 @@ module Text.TypeScript.GenForeign
       ( tsSourceFileToJsModuleString
       , tsSourceFileToPsModuleString
       , changeFuncReturnTypeWith
+      , tryCreateModulesFromStringSource
+      , GenSourcePair
       , module Gen
       , module Parse
       )
@@ -113,7 +115,7 @@ type GenSourcePair =
 -- | purescript string (`module My.Module where ..`), and the source library that will go
 -- | in the `require("your_required_library")` part of the generated JS code.
 tryCreateModulesFromStringSource :: String -> String -> String -> Either JsonDecodeError GenSourcePair
-tryCreateModulesFromStringSource sourceCode psModuleName jsSourceLibrary =
+tryCreateModulesFromStringSource jsSourceLibrary psModuleName sourceCode =
   map (\sourceFile -> { psString: tsSourceFileToPsModuleString psModuleName sourceFile
                       , jsString: tsSourceFileToJsModuleString jsSourceLibrary sourceFile
                       }

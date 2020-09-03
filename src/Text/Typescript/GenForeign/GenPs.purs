@@ -63,15 +63,15 @@ module Text.TypeScript.GenForeign.GenPs
        where
 
 import Prelude
-
-import Data.Array (uncons)
+import Control.MonadZero (guard)
+import Data.Boolean 
+import Data.Array (uncons, cons, filter, deleteBy, nubByEq)
 import Data.Array.NonEmpty as NE
-import Data.Foldable (foldMap, intercalate, surroundMap)
+import Data.Foldable (foldMap, intercalate, surroundMap, foldr)
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null)
 import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, ConstructorType, PrimitiveTsType(..), SourceFile, TsFunction, TsType(..), TypeParam(..), Interface)
-
-
+import Prim.Boolean
 _n :: String
 _n = "\n"
 
@@ -109,12 +109,49 @@ type PsType = { name :: String
 tsSourceFileToPsModule :: String -> SourceFile -> PsModule
 tsSourceFileToPsModule moduleName sourceFile =
   { name: moduleName
-  , imports:  ["import Foreign", "import Data.Function.Uncurried"]
+  , imports:  [ "import Foreign"
+              , "import Data.Function.Uncurried"
+              , "import Data.Maybe"
+              ]
   , functions: foldMap tsClassToPsFunctions sourceFile.classes <>
                 map tsFunctionToPsFunction sourceFile.functions
-  , foreignData: map tsClassToPsForeignData sourceFile.classes
+  , foreignData: tsSourceFileToPsForeignData sourceFile -- map tsClassToPsForeignData sourceFile.classes
   , interfaces : map tsInterfaceToPsType sourceFile.interfaces
   }
+
+
+tsSourceFileToPsForeignData :: SourceFile -> Array PsForeignData
+tsSourceFileToPsForeignData sourceFile =
+  classesForeign <> diff
+  where
+    paramsToPsForeignData = do
+      func <- foldMap (_.methods) sourceFile.classes <>
+              foldMap (_.constructors) sourceFile.classes <>
+              sourceFile.functions
+      tsType <- cons func.tsType $
+                map _.tsType func.params
+      typeReference <- getAllTypeReferencesForType tsType
+      ----  guard $ isTypeReference param.tsType
+      pure { name: tsTypeToString typeReference
+           , docs: ""
+           , psType: "Type"
+           }
+    classesForeign :: Array PsForeignData
+    classesForeign = map tsClassToPsForeignData sourceFile.classes
+    diff :: Array PsForeignData
+    diff = foldr (deleteBy psEq) (nubByEq psEq paramsToPsForeignData) classesForeign
+    psEq = (\a b -> a.name == b.name)
+    getAllTypeReferencesForType :: TsType -> Array TsType
+    getAllTypeReferencesForType = case _ of
+      (CompositeType {typeConstructor: b, typeParams: a}) -> getAllTypeReferencesForTypeParam a
+      (PrimitiveType a) -> []
+      (TypeReference a) -> [TypeReference a]
+    getAllTypeReferencesForTypeParam = case _ of
+      SingletonTypeParam c -> getAllTypeReferencesForType c
+      ArrayTypeParams c -> foldMap getAllTypeReferencesForType c
+
+
+
 
 tsInterfaceToPsType :: Interface -> PsType
 tsInterfaceToPsType tsInterface =
@@ -252,8 +289,11 @@ tsDocsToString :: String -> String
 tsDocsToString =
   filter4 <<< filter3 <<< filter2 <<< filter1 <<< trim
   where
-    filter1 = append "--| "
-    filter2 = replaceAll (Pattern "\n") (Replacement "\n--| ")
-    filter3 = replaceAll (Pattern "--| \n") (Replacement "")
-    filter4 = \str -> if (length str < 5) then "" else str
+    filter1 = append "-- | "
+    filter2 = replaceAll (Pattern "\n") (Replacement "\n-- | ")
+    filter3 = replaceAll (Pattern "-- | \n") (Replacement "")
+    filter4 = \str -> if (length str < 6) then "" else str
 
+isTypeReference :: TsType -> Boolean
+isTypeReference (TypeReference _) = true
+isTypeReference _ = false
