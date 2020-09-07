@@ -38,3 +38,10 @@ spago install typescript-genforeign
 ## Documentation
 
 You can build the documentation by running `spago docs`.
+
+
+## Todos
+- static methods
+- untagged union type import (investigate viability)
+- callbacks / functions
+- namespaced code (especially, a module calling another namespace in the same file)

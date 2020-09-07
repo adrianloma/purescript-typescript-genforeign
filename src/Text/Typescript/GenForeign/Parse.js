@@ -101,9 +101,9 @@ function generateDocumentationForProgram(program) {
                 declarations = typeConstructor
                     .getConstructSignatures()
                     .map((constructor) => (
-                        { name: checker.typeToString(constructor.getReturnType())
+                        { name: "constructor" + classSymbol.getName()
                           , params: node.parameters.map(serializeParameterNode)
-                          , tsType: checker.typeToString(constructor.getReturnType())
+                          , tsType: classSymbol.getName()
                           , docs: ts.displayPartsToString(constructor.getDocumentationComment(checker))
                         }
                 ));
@@ -197,12 +197,36 @@ function generateDocumentationForProgram(program) {
                        };
             case ts.SyntaxKind.TypeReference:
                 if(nextType.typeArguments === undefined){
+                    if (nextType.getText() == "Function"){
+                        return "JsFunction"; // reserved word
+                    }
                     return nextType.getText();
                 } else {
                     return { typeConstructor: nextType.typeName.getText()
                              , typeParams: nextType.typeArguments.map(serializeNestedType)
                            };
                 }
+            case ts.SyntaxKind.UnionType:
+                // name will be used to create union type signature
+                return { name: symbol.getName()
+                       , unionTypes: nextType.types.map(serializeNestedType)
+                       };
+            case ts.SyntaxKind.TypeLiteral:
+                return { name: ""
+                         , properties: getSignatureForDeclarationKind(
+                                            nextType
+                                            , ts.SyntaxKind.PropertySignature)
+                       };
+            case ts.SyntaxKind.ThisType:
+                let thisSymbol = checker.getSymbolAtLocation(nextType);
+                return thisSymbol.getName();
+            case ts.SyntaxKind.FunctionType:
+                return {
+                    name: symbol.getName() + "callBack"
+                    , docs: ""
+                    , tsType: serializeNestedType(nextType.type)
+                    , params: nextType.parameters.map(serializeNestedType)
+                };
             default:
                 return nextType.getText();
             }

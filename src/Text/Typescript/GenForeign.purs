@@ -64,7 +64,9 @@ module Text.TypeScript.GenForeign
 import Prelude
 
 import Data.Argonaut.Decode (JsonDecodeError)
+import Data.Array (null) as A
 import Data.Array.NonEmpty as NE
+import Data.Bifunctor (lmap)
 import Data.Either (Either(..))
 import Data.Foldable (foldl)
 import Text.TypeScript.GenForeign.GenJs (jsModuleToString, tsSourceModuleToJsModule) as Gen
@@ -114,10 +116,13 @@ type GenSourcePair =
 -- | This function takes the source code, the module name as it will appear in the generated
 -- | purescript string (`module My.Module where ..`), and the source library that will go
 -- | in the `require("your_required_library")` part of the generated JS code.
-tryCreateModulesFromStringSource :: String -> String -> String -> Either JsonDecodeError GenSourcePair
-tryCreateModulesFromStringSource jsSourceLibrary psModuleName sourceCode =
-  map (\sourceFile -> { psString: tsSourceFileToPsModuleString psModuleName sourceFile
-                      , jsString: tsSourceFileToJsModuleString jsSourceLibrary sourceFile
-                      }
-      )
-  (Parse.tryParseSourceFile sourceCode)
+tryCreateModulesFromStringSource :: String -> String -> String -> Either String GenSourcePair
+tryCreateModulesFromStringSource jsSourceLibrary psModuleName sourceCode = do
+  sourceFile <- lmap show $ Parse.tryParseSourceFile sourceCode
+  let psModule = Gen.tsSourceFileToPsModule psModuleName sourceFile
+  if (A.null psModule.exports) then
+    Left "Error: source code produced no exposable functions."
+  else
+    Right { psString: Gen.psModuleToString psModule
+          , jsString: tsSourceFileToJsModuleString jsSourceLibrary sourceFile
+          }

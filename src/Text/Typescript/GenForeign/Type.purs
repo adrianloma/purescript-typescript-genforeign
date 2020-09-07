@@ -36,6 +36,7 @@ type Enum =
   , members :: Array String
   }
 
+type TypeLiteral = Interface
 type Interface =
   { name :: String
   , properties :: Array Param
@@ -43,6 +44,7 @@ type Interface =
 
 type ClassMethod = TsFunction
 type ClassConstructor = TsFunction
+type FunctionType = TsFunction
 type TsFunction =
   { name :: String
   , docs :: String
@@ -59,9 +61,18 @@ data TypeParam =
   SingletonTypeParam TsType
   | ArrayTypeParams (Array TsType)
 
+
+type UnionType =
+  { name :: String
+  , unionTypes :: Array TsType
+  }
+
 data TsType =
   CompositeType ConstructorType
   | PrimitiveType PrimitiveTsType
+  | TsTypeUnionType UnionType
+  | TsTypeTypeLiteral TypeLiteral
+  | TsTypeFunctionType FunctionType
   | TypeReference String
 
 data PrimitiveTsType =
@@ -72,8 +83,6 @@ data PrimitiveTsType =
   | TsUndefined
   | TsObject
   | TsBoolean
-  -- | TsBigInt -- No support
-
 
 derive instance genericTypeParam :: Generic TypeParam _
 instance encodeJsonTypeParam :: EncodeJson TypeParam where
@@ -83,7 +92,13 @@ instance encodeJsonTypeParam :: EncodeJson TypeParam where
 
 derive instance genericTsType :: Generic TsType _
 instance encodeJsonTsType :: EncodeJson TsType where
-  encodeJson = genericEncodeJson
+  encodeJson tsType = case tsType of
+    CompositeType a -> encodeJson a
+    PrimitiveType a -> encodeJson a
+    TsTypeUnionType a -> encodeJson a
+    TsTypeTypeLiteral a -> encodeJson a
+    TsTypeFunctionType a -> encodeJson a
+    TypeReference a -> encodeJson a
 
 derive instance genericPrimitiveTsType :: Generic PrimitiveTsType _
 instance encodeJsonPrimitiveTsType :: EncodeJson PrimitiveTsType where
@@ -96,6 +111,9 @@ instance decodeJsonTsType :: DecodeJson TsType where
     lmap (const $ TypeMismatch "TsType") $
           CompositeType <$> decodeJson obj
       <|> PrimitiveType <$> decodeJson obj
+      <|> TsTypeUnionType <$> decodeJson obj
+      <|> TsTypeFunctionType <$> decodeJson obj
+      <|> TsTypeTypeLiteral <$> decodeJson obj
       <|> TypeReference <$> decodeJson obj
 
 instance decodeJsonTypeParam :: DecodeJson TypeParam where
