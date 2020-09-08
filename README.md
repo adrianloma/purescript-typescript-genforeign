@@ -53,24 +53,24 @@ Some classes are generic (eg Curve<T>) this breaks a lot of things. This is inte
 As a reference library, I am currently using three.js. I haven't tested if the functions work. I've mostly concentrated on fixing bugs. According to `ls -lR | grep ".d.ts" | wc -l` there are 242 typescript declaration files in `node_modules/three/src/`. Out of those 242, 16 files don't get processed. Of those 16 files, 4 are only re-exports, 3 only export variables/enums, 6 fail due to being namespaced. 
 
 These are several files which fail compleltely, mainly because of being namespaced or consisting of only constants and enums.
-`node_modules/three/src/Three.d.ts` : Fails because it's a file with no declarations, only exports
-`node_modules/three/src/animation/AnimationUtils.d.ts` : Namespaced
-`node_modules/three/src/audio/AudioContext.d.ts` : Fails because it's just this code: `export const AudioContext: AudioContext;`
-`node_modules/three/src/constants.d.ts` : It only has exports and enums.
-`node_modules/three/src/extras/ImageUtils.d.ts` : Namespaced
-`node_modules/three/src/extras/core/Interpolations.d.ts` : Namespaced
-`node_modules/three/src/extras/curves/Curves.d.ts` : Only re-exports
-`node_modules/three/src/geometries/Geometries.d.ts` : Only re-exports
-`node_modules/three/src/loaders/Cache.d.ts` : Namespaced
-`node_modules/three/src/materials/Materials.d.ts` : Only re-exports
-`node_modules/three/src/math/MathUtils.d.ts` : Namespaced
-`node_modules/three/src/renderers/shaders/ShaderChunk.d.ts` : It exports a variable. It is a typeliteral, since it's declared inline. It could be converted to a real PS type, but I don't see the value of doing it for just this file.  
+* `node_modules/three/src/Three.d.ts` : Fails because it's a file with no declarations, only exports
+* `node_modules/three/src/animation/AnimationUtils.d.ts` : Namespaced
+* `node_modules/three/src/audio/AudioContext.d.ts` : Fails because it's just this code: `export const AudioContext: AudioContext;`
+* `node_modules/three/src/constants.d.ts` : It only has exports and enums.
+* `node_modules/three/src/extras/ImageUtils.d.ts` : Namespaced
+* `node_modules/three/src/extras/core/Interpolations.d.ts` : Namespaced
+* `node_modules/three/src/extras/curves/Curves.d.ts` : Only re-exports
+* `node_modules/three/src/geometries/Geometries.d.ts` : Only re-exports
+* `node_modules/three/src/loaders/Cache.d.ts` : Namespaced
+* `node_modules/three/src/materials/Materials.d.ts` : Only re-exports
+* `node_modules/three/src/math/MathUtils.d.ts` : Namespaced
+* `node_modules/three/src/renderers/shaders/ShaderChunk.d.ts` : It exports a variable. It is a typeliteral, since it's declared inline. It could be converted to a real PS type, but I don't see the value of doing it for just this file.  
 
 Then these are the rest of the problematic files:
-`src/Three/Animation/PropertyBinding.purs`: Fails due to referencing a namespaced part of the file.
-`src/Three/Materials/Material.purs`: Fails due to union types with literal strings.
-`src/Three/Core/GLBufferAttribute.purs`: Fails due to union types with literal numbers.
-`src/Three/Extras/Core/Curve.purs`: Fails due to the `type Class =` and `type Class a =` problem described above, since it is a class with a generic parameter.
+* `src/Three/Animation/PropertyBinding.purs`: Fails due to referencing a namespaced part of the file.
+* `src/Three/Materials/Material.purs`: Fails due to union types with literal strings.
+* `src/Three/Core/GLBufferAttribute.purs`: Fails due to union types with literal numbers.
+* `src/Three/Extras/Core/Curve.purs`: Fails due to the `type Class =` and `type Class a =` problem described above, since it is a class with a generic parameter.
 
 Once these files are deleted, the library compiles. There are known issues, such as static methods, and unkown issues. The resulting library hasn't been run. Also, it requires a forked version of `purescript-functions` since it needs to uncurry `Fn17` and the purescript library reaches only to `Fn10`. 
 
