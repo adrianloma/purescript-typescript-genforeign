@@ -126,12 +126,14 @@ tsSourceFileToPsModule moduleName sourceFile =
   , exports: map _.name functions <>
               map _.name foreignData <>
               map _.name interfaces <>
-              map _.name unionTypes
+              map _.name unionTypes <>
+              map _.name typeWrappers
   , imports:  [ "import Foreign"
               , "import Data.Function.Uncurried"
               , "import Data.Maybe"
               , "import Prelude"
               , "import Untagged.Union"
+              , "import Effect"
               ]
   , functions : functions
   , foreignData : foreignData
@@ -231,7 +233,10 @@ differenceBy predicate filterList toFilter =
 tsInterfaceToPsRecord :: Interface -> PsRecord
 tsInterfaceToPsRecord tsInterface =
   { name: tsInterface.name
-  , fields: map (\param -> {name: param.name, psType: tsTypeToString param.tsType}) tsInterface.properties
+  , fields: map (\param -> { name: lowerCaseFirst param.name
+                           , psType: tsTypeToString param.tsType
+                           }
+                ) tsInterface.properties
   }
 
 tsClassToPsForeignData :: Class -> PsForeignData
@@ -289,7 +294,7 @@ psModuleToString psModule =
     foreignFunctionsImports = foldMap psFunctionToImportString psModule.functions
     runFunctions = intercalate _n $ map psFunctionToRunFunctionString psModule.functions
     foreignData = surroundMap _n psForeignDataToString psModule.foreignData
-    interfaces = foldMap psRecordToString psModule.interfaces
+    interfaces = intercalate _n $ map psRecordToString psModule.interfaces
     unionTypes = intercalate _n $ map psUnionTypeToString psModule.unionTypes
     typeWrappers = intercalate _n $ map psTypeWrappersToString psModule.typeWrappers
 
@@ -352,11 +357,14 @@ tsTypeToString = case _ of
 
 tsFunctionTypeToString :: FunctionType -> String
 tsFunctionTypeToString tsFunction =
-  "(Fn" <> show (A.length tsFunction.params) <>
-   " " <>
-   intercalate " " (tsTypesToStrings (map _.tsType tsFunction.params)) <>
-   " (Effect " <> tsTypeToString tsFunction.tsType <> ")" <>
-   ")"
+  let
+    typesAsString = (tsTypesToStrings (map _.tsType tsFunction.params))
+  in
+    "(Fn" <> show (NE.length typesAsString) <>
+    " " <>
+    intercalate " " typesAsString <>
+    " (Effect " <> tsTypeToString tsFunction.tsType <> ")" <>
+    ")"
 
 -- This is an alternative implementation to using row types directly in type signatures
 -- -- | This function turns a TypeLiteral into a string that represents its

@@ -126,5 +126,3 @@ tryCreateModulesFromStringSource jsSourceLibrary psModuleName sourceCode = do
     Right { psString: Gen.psModuleToString psModule
           , jsString: tsSourceFileToJsModuleString jsSourceLibrary sourceFile
           }
-
-doSomething = Parse.test 

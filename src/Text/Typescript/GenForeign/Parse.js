@@ -12,10 +12,6 @@ exports.generateDocumentationForInputString = function(inputString){
     return generateDocumentationForInputStringAndOptions(inputString, options);
 };
 
-exports.test = function(deleteMe){
-    return 3;
-}
-
 function generateDocumentationForInputStringAndOptions(inputString, options){
     let sourceMapText = "";
     let outputText = "";
@@ -229,8 +225,10 @@ function generateDocumentationForProgram(program) {
                     name: symbol.getName() + "callBack"
                     , docs: ""
                     , tsType: serializeNestedType(nextType.type)
-                    , params: nextType.parameters.map(serializeNestedType)
+                    , params: nextType.parameters.map(serializeParameterNode)
                 };
+            case ts.SyntaxKind.VoidKeyword:
+                return "void";
             default:
                 return nextType.getText();
             }
