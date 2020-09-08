@@ -40,6 +40,7 @@ import Prelude
 import Data.Array (cons)
 import Data.Foldable (foldMap, intercalate)
 import Text.TypeScript.Type (Class, ClassConstructor, ClassMethod, TsFunction, SourceFile)
+import Data.String
 
 _n :: String
 _n = "\n"
@@ -83,36 +84,40 @@ jsFunctionToString func =
     returnExpression = func.expressionPrefix <> func.innerFuncName <> "(" <> commas func.innerParamNames <> ")"
     commas = intercalate ", "
 
+-- | Makes the first letter of a string upper case
+changeFirstLetter :: (String -> String) -> String -> String
+changeFirstLetter transformation =
+  joinFirstLetterWithRest <<< applyTransformationToFirstLetter <<< splitFirstLetterAndRest
+  where
+    splitFirstLetterAndRest = splitAt 1
+    applyTransformationToFirstLetter =
+      (\strPair -> strPair {before = transformation strPair.before})
+    joinFirstLetterWithRest = (\strPair -> strPair.before <> strPair.after)
+
+-- | Makes the first letter of a string lower case
+lowerCaseFirst :: String -> String
+lowerCaseFirst = changeFirstLetter toLower
+
 tsConstructorToJsFunction :: ClassConstructor -> JsFunction
-tsConstructorToJsFunction tsCons =
-  let
-    paramNames = (map _.name tsCons.params)
-  in
-  { outerFuncName: "constructor" <> tsCons.name <> "Impl"
-  , innerFuncName: tsCons.name
-  , outerParamNames: paramNames
-  , innerParamNames: paramNames
-  , expressionPrefix: "new sourceModule."
+tsConstructorToJsFunction tsCons = (tsFunctionToJsFunction tsCons)
+  { expressionPrefix = "new sourceModule."
   }
 
 tsMethodToJsFunction :: ClassMethod -> JsFunction
 tsMethodToJsFunction tsMethod =
   let
-    paramNames = (map _.name tsMethod.params)
+    jsFunc = (tsFunctionToJsFunction tsMethod)
   in
-  { outerFuncName: tsMethod.name <> "Impl"
-  , innerFuncName: tsMethod.name
-  , outerParamNames: cons "classInstance" paramNames
-  , innerParamNames: paramNames
-  , expressionPrefix: "classInstance."
-  }
+   jsFunc { outerParamNames = cons "classInstance" jsFunc.outerParamNames
+          , expressionPrefix = "classInstance."
+          }
 
 tsFunctionToJsFunction :: TsFunction -> JsFunction
 tsFunctionToJsFunction tsFunc =
   let
     paramNames = (map _.name tsFunc.params)
   in
-  { outerFuncName: tsFunc.name <> "Impl"
+  { outerFuncName: lowerCaseFirst $ tsFunc.name <> "Impl"
   , innerFuncName: tsFunc.name
   , outerParamNames: paramNames
   , innerParamNames: paramNames

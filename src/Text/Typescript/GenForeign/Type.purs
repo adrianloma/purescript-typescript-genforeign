@@ -79,6 +79,7 @@ data PrimitiveTsType =
     TsAny
   | TsNumber
   | TsVoid
+  | TsNull
   | TsString
   | TsUndefined
   | TsObject
@@ -132,6 +133,7 @@ instance decodeJsonPrimitiveTsType :: DecodeJson PrimitiveTsType where
         "any" -> Just TsAny
         "number" -> Just TsNumber
         "void" -> Just TsVoid
+        "null" -> Just TsNull
         "string" -> Just TsString
         "undefined" -> Just TsUndefined
         "object" -> Just TsObject

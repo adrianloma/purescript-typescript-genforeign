@@ -12,3 +12,7 @@ tryParseSourceFile sourceString =  do
                       let jsonToProcess = generateDocumentationForInputString sourceString
                       json <- parseJson jsonToProcess
                       decodeJson json
+
+foreign import test :: Curve Int -> Int
+
+newtype Curve a = Curve a

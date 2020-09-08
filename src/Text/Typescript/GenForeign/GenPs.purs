@@ -42,6 +42,7 @@ module Text.TypeScript.GenForeign.GenPs
        , PsModule
        , PsRecord
        , PsUnionType
+       , PsTypeWrapper
        , tsSourceFileToPsModule
        , tsInterfaceToPsRecord
        , tsClassToPsForeignData
@@ -65,15 +66,15 @@ module Text.TypeScript.GenForeign.GenPs
 
 import Data.Boolean
 import Prelude
+import Text.TypeScript.Type
 
 import Control.MonadZero (guard)
-import Data.Array (cons, deleteBy, filter, intercalate, nubByEq, uncons)
+import Data.Array (cons, deleteBy, filter, intercalate, nub, nubByEq, uncons)
 import Data.Array as A
 import Data.Array.NonEmpty as NE
 import Data.Foldable (foldMap, intercalate, surroundMap, foldr, fold)
 import Data.Maybe (Maybe(..))
-import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null, splitAt, toUpper)
-import Text.TypeScript.Type 
+import Data.String (Pattern(..), Replacement(..), length, replaceAll, trim, null, splitAt, toUpper, toLower)
 
 _n :: String
 _n = "\n"
@@ -103,7 +104,10 @@ type PsModule =
   , foreignData :: Array PsForeignData
   , interfaces :: Array PsRecord
   , unionTypes :: Array PsUnionType
+  , typeWrappers :: Array PsTypeWrapper
   }
+
+type PsTypeWrapper = {name :: String}
 
 type PsUnionType =
   { name :: String
@@ -133,38 +137,34 @@ tsSourceFileToPsModule moduleName sourceFile =
   , foreignData : foreignData
   , interfaces  : interfaces
   , unionTypes  : unionTypes
+  , typeWrappers : typeWrappers
   }
   where
-    functions = foldMap tsClassToPsFunctions sourceFile.classes <>
+    functions = nubByEq (\a b -> a.name == b.name) $ 
+      foldMap tsClassToPsFunctions sourceFile.classes <>
                   map tsFunctionToPsFunction sourceFile.functions
     foreignData = tsSourceFileToPsForeignData sourceFile
     interfaces = map tsInterfaceToPsRecord sourceFile.interfaces
-    unionTypes = map tsUnionTypeToPsUnionType $ getAllUnionTypesInSourceFile sourceFile
+    unionTypes = nub $ map tsUnionTypeToPsUnionType $
+                 A.mapMaybe getUnionTypeFromTsType $
+                 getAllTypesInSourceFile sourceFile
+    typeWrappers = nub $ map tsConstructorTypeToPsTypeWrapper $
+                    differenceBy (\a b -> a.name /= b.typeConstructor) foreignData $
+                    A.mapMaybe getConstructorTypeFromTsType $
+                    getAllTypesInSourceFile sourceFile
 
-getAllUnionTypesInSourceFile :: SourceFile -> Array UnionType
-getAllUnionTypesInSourceFile sourceFile = do
-  func <- foldMap (_.methods) sourceFile.classes <>
-          foldMap (_.constructors) sourceFile.classes <>
-          sourceFile.functions
-  tsType <- cons func.tsType $
-            map _.tsType func.params
-  typeUnion <- getAllTypeUnionsForType tsType
-  pure typeUnion
-  where
-    getAllTypeUnionsForType :: TsType -> Array UnionType
-    getAllTypeUnionsForType = case _ of
-      (CompositeType {typeConstructor: b, typeParams: a}) -> getAllTypeUnionsForTypeParam a
-      (TsTypeUnionType unionType) -> [unionType]
-      (TsTypeTypeLiteral typeLiteral) -> foldMap getAllTypeUnionsForType
-                                         $ map _.tsType typeLiteral.properties
-      (TsTypeFunctionType a) -> foldMap getAllTypeUnionsForType (cons a.tsType (map _.tsType a.params))
-      (PrimitiveType a) -> []
-      (TypeReference a) -> []
+tsConstructorTypeToPsTypeWrapper tsConstructor = {name: tsConstructor.typeConstructor}
 
-    getAllTypeUnionsForTypeParam = case _ of
-      SingletonTypeParam c -> getAllTypeUnionsForType c
-      ArrayTypeParams c -> foldMap getAllTypeUnionsForType c
 
+getConstructorTypeFromTsType (CompositeType a) =
+  if (a.typeConstructor == "Array" || a.typeConstructor == "Maybe") then
+    Nothing
+  else
+    Just a
+getConstructorTypeFromTsType _ = Nothing
+
+getUnionTypeFromTsType (TsTypeUnionType a) = Just a
+getUnionTypeFromTsType _ = Nothing
 
 tsUnionTypeToPsUnionType :: UnionType -> PsUnionType
 tsUnionTypeToPsUnionType tsUnionType =
@@ -172,44 +172,61 @@ tsUnionTypeToPsUnionType tsUnionType =
       , unionTypes : tsTypesToStrings tsUnionType.unionTypes
       }
 
+getAllTypesInSourceFile :: SourceFile -> Array TsType
+getAllTypesInSourceFile sourceFile = do
+    let funcs = foldMap (_.methods) sourceFile.classes <>
+                foldMap (_.constructors) sourceFile.classes <>
+                sourceFile.functions
+    let funcTypes = foldMap (\func -> cons func.tsType $ map _.tsType func.params) funcs
+    let interfaceTypes = map _.tsType $ foldMap _.properties sourceFile.interfaces
+    tsType <- funcTypes <> interfaceTypes
+    getAllSubTypes tsType
+  where
+    getAllSubTypes aType =
+      let
+        subTypes :: Array TsType
+        subTypes = case aType of
+          (CompositeType {typeConstructor: b, typeParams: a}) -> case a of
+                                        SingletonTypeParam c -> getAllSubTypes c
+                                        ArrayTypeParams c -> foldMap getAllSubTypes c
+          (TsTypeUnionType unionType) -> foldMap getAllSubTypes unionType.unionTypes
+          (TsTypeTypeLiteral typeLiteral) -> foldMap getAllSubTypes
+                                            $ map _.tsType typeLiteral.properties
+          (TsTypeFunctionType a) -> foldMap getAllSubTypes
+                                            (cons a.tsType (map _.tsType a.params))
+          (PrimitiveType a) -> []
+          (TypeReference a) -> []
+      in
+        cons aType subTypes
+
 tsSourceFileToPsForeignData :: SourceFile -> Array PsForeignData
 tsSourceFileToPsForeignData sourceFile =
-  classesForeign <> diff
+  classesForeign <> diff paramsToPsForeignData
   where
     paramsToPsForeignData = do
-      func <- foldMap (_.methods) sourceFile.classes <>
-              foldMap (_.constructors) sourceFile.classes <>
-              sourceFile.functions
-      tsType <- cons func.tsType $
-                map _.tsType func.params
-      typeReference <- getAllTypeReferencesForType tsType
-      pure { name: tsTypeToString typeReference
+      tsType <- filter isTypeReference $ getAllTypesInSourceFile sourceFile
+      pure { name: tsTypeToString tsType
            , docs: ""
            , psType: "Type" -- Make references which are not declared in this module foreign
            }
+
+ 
     classesForeign :: Array PsForeignData
     classesForeign = map tsClassToPsForeignData sourceFile.classes
-    diff :: Array PsForeignData
-    diff = foldr (deleteBy psEq) (nubByEq psEq paramsToPsForeignData) classesForeign
+
+
+    psEq :: forall a b. {name :: String | a} -> {name :: String | b} -> Boolean
     psEq = (\a b -> a.name == b.name)
 
-    getAllTypeReferencesForType :: TsType -> Array TsType
-    getAllTypeReferencesForType = case _ of
-      (CompositeType {typeConstructor: b, typeParams: a}) -> getAllTypeReferencesForTypeParam a
-      (TsTypeUnionType unionType) -> foldMap getAllTypeReferencesForType unionType.unionTypes
-      (TsTypeTypeLiteral typeLiteral) -> foldMap getAllTypeReferencesForType
-                                         $ map _.tsType typeLiteral.properties
-      (TsTypeFunctionType a) -> foldMap getAllTypeReferencesForType
-                                (cons a.tsType (map _.tsType a.params))
-      (PrimitiveType a) -> []
-      (TypeReference a) -> [TypeReference a]
+    diff :: Array PsForeignData -> Array PsForeignData
+    diff = differenceBy (not <<< psEq) classesForeign <<< -- class declaration has documentation.
+           differenceBy (not <<< psEq) sourceFile.interfaces <<< -- interfaces will be declared as Records
+           nubByEq psEq -- nub duplicates
 
-    getAllTypeReferencesForTypeParam = case _ of
-      SingletonTypeParam c -> getAllTypeReferencesForType c
-      ArrayTypeParams c -> foldMap getAllTypeReferencesForType c
-
-
-
+    
+differenceBy :: forall a b. (a -> b -> Boolean) -> Array a -> Array b -> Array b
+differenceBy predicate filterList toFilter =
+  foldr (\a -> filter (predicate a)) toFilter filterList
 
 tsInterfaceToPsRecord :: Interface -> PsRecord
 tsInterfaceToPsRecord tsInterface =
@@ -232,17 +249,11 @@ tsMethodToPsFunction tsClass tsMethod =
    methodPs {types = NE.cons tsClass.name methodPs.types}
 
 tsConstructorToPsFunction :: Class -> ClassConstructor -> PsFunction
-tsConstructorToPsFunction tsClass tsConstructor =
-  let
-   constructorPs = tsFunctionToPsFunction tsConstructor
-  in
-   constructorPs -- { name = "constructor" <> constructorPs.name
-                 -- , types = NE.snoc constructorPs.types tsClass.name
-                 -- }
+tsConstructorToPsFunction tsClass tsConstructor = tsFunctionToPsFunction tsConstructor
 
 tsFunctionToPsFunction :: TsFunction -> PsFunction
 tsFunctionToPsFunction tsFunc =
-  { name: tsFunc.name
+  { name: lowerCaseFirst tsFunc.name
   , typeDeclPrefix: ""
   , types: tsTypesToStrings $ map (_.tsType) tsFunc.params <> [tsFunc.tsType]
   , docs: tsDocsToString $ tsFunc.docs <> surroundMap _n getParamDocs tsFunc.params
@@ -271,7 +282,8 @@ psModuleToString psModule =
   runFunctions <> _n <>
   foreignData <> _n <>
   interfaces <> _n <>
-  unionTypes
+  unionTypes <> _n <>
+  typeWrappers
   where
     exports = intercalate "\n  , " psModule.exports
     foreignFunctionsImports = foldMap psFunctionToImportString psModule.functions
@@ -279,15 +291,20 @@ psModuleToString psModule =
     foreignData = surroundMap _n psForeignDataToString psModule.foreignData
     interfaces = foldMap psRecordToString psModule.interfaces
     unionTypes = intercalate _n $ map psUnionTypeToString psModule.unionTypes
+    typeWrappers = intercalate _n $ map psTypeWrappersToString psModule.typeWrappers
+
+psTypeWrappersToString :: PsTypeWrapper -> String
+psTypeWrappersToString tWrapper =
+  "type " <> tWrapper.name <> " a = a"
 
 psUnionTypeToString :: PsUnionType -> String
 psUnionTypeToString unionType =
-  "type " <> unionType.name <> " = " <> intercalate "|+|" unionType.unionTypes <> _n
+  "type " <> unionType.name <> " = " <> intercalate " |+| " unionType.unionTypes <> _n
 
 psRecordToString :: PsRecord -> String
 psRecordToString psType =
   "type " <> psType.name <> " =\n" <>
-  "  { " <> intercalate "\n  , " (map fieldToString psType.fields) <> "\n  }"
+  "  { " <> intercalate "\n  , " (map fieldToString psType.fields) <> "\n  }" <> _n
   where
     fieldToString field = field.name <> " :: " <> field.psType
 
@@ -335,12 +352,10 @@ tsTypeToString = case _ of
 
 tsFunctionTypeToString :: FunctionType -> String
 tsFunctionTypeToString tsFunction =
-  "(Fn" <>
-   show (A.length tsFunction.params) <>
+  "(Fn" <> show (A.length tsFunction.params) <>
    " " <>
    intercalate " " (tsTypesToStrings (map _.tsType tsFunction.params)) <>
-   " (Effect " <>
-   tsTypeToString tsFunction.tsType <>
+   " (Effect " <> tsTypeToString tsFunction.tsType <> ")" <>
    ")"
 
 -- This is an alternative implementation to using row types directly in type signatures
@@ -348,7 +363,7 @@ tsFunctionTypeToString tsFunction =
 -- -- | type signature in PureScript. This is not the actual type because type
 -- -- | literals are like ad-hoc interfaces (like defining a record type in a function signature)
 -- tsTypeLiteralToTypeNameString typeLiteral = "TL_" <>
---                                     capitalizeWord typeLiteral.name <>
+--                                     upperCaseFirst typeLiteral.name <>
 --                                     "_" <>
 --                                     (squishTypesToString $ map _.tsType typeLiteral.properties)
 
@@ -358,21 +373,29 @@ tsTypeLiteralToString typeLiteral =
       fieldToString field = field.name <> " :: " <> field.psType
       psType = tsInterfaceToPsRecord typeLiteral
 
+-- | Makes the first letter of a string upper case
+changeFirstLetter :: (String -> String) -> String -> String
+changeFirstLetter transformation =
+  joinFirstLetterWithRest <<< applyTransformationToFirstLetter <<< splitFirstLetterAndRest
+  where
+    splitFirstLetterAndRest = splitAt 1
+    applyTransformationToFirstLetter =
+      (\strPair -> strPair {before = transformation strPair.before})
+    joinFirstLetterWithRest = (\strPair -> strPair.before <> strPair.after)
 
+-- | Makes the first letter of a string lower case
+lowerCaseFirst :: String -> String
+lowerCaseFirst = changeFirstLetter toLower
 
 -- | Makes the first letter of a string upper case
-capitalizeWord :: String -> String
-capitalizeWord = joinFirstLetterWithRest <<< capitalizeFirstLetter <<< splitFirstLetterAndRest
-        where
-          splitFirstLetterAndRest = splitAt 1
-          capitalizeFirstLetter = (\strPair -> strPair {before = toUpper strPair.before})
-          joinFirstLetterWithRest = (\strPair -> strPair.before <> strPair.after)
+upperCaseFirst :: String -> String
+upperCaseFirst = changeFirstLetter toUpper
 
 -- | Turns an array of TsType into a "squashed" string.
 -- | (Array SomeType) -> ArraySomeType
 squishTypesToString :: Array TsType -> String
 squishTypesToString = fold <<<
-                        map capitalizeWord <<<
+                        map upperCaseFirst <<<
                         map (removeSubstringFromString " ") <<<
                         map (removeSubstringFromString ")") <<<
                         map (removeSubstringFromString "(") <<<
@@ -384,7 +407,7 @@ removeSubstringFromString substr = replaceAll (Pattern substr) (Replacement "")
 -- | This turns a union type into a string for signatures of functions.
 -- | The type still has to be created using tsUnionTypeToPsUnionType and printed.
 tsUnionTypeToString unionType = "UT_" <>
-                                capitalizeWord unionType.name <>
+                                upperCaseFirst unionType.name <>
                                 "_" <>
                                 (squishTypesToString unionType.unionTypes)
 
@@ -402,6 +425,7 @@ tsPrimitiveTypeToString = case _ of
     TsAny   -> "Foreign"
     TsNumber   -> "Number"
     TsVoid   ->  "Unit"
+    TsNull   ->  "Unit"
     TsString   -> "String"
     TsUndefined -> "Unit"
     TsObject -> "Foreign"

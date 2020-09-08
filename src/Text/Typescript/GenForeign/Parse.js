@@ -12,6 +12,10 @@ exports.generateDocumentationForInputString = function(inputString){
     return generateDocumentationForInputStringAndOptions(inputString, options);
 };
 
+exports.test = function(deleteMe){
+    return 3;
+}
+
 function generateDocumentationForInputStringAndOptions(inputString, options){
     let sourceMapText = "";
     let outputText = "";
@@ -196,7 +200,7 @@ function generateDocumentationForProgram(program) {
                          , typeParams: serializeNestedType(nextType.elementType)
                        };
             case ts.SyntaxKind.TypeReference:
-                if(nextType.typeArguments === undefined){
+                if(nextType.typeArguments === undefined || nextType.typeArguments.length == 0){
                     if (nextType.getText() == "Function"){
                         return "JsFunction"; // reserved word
                     }
