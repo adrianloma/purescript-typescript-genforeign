@@ -127,11 +127,11 @@ function generateDocumentationForProgram(program) {
     /** visit nodes finding exported classes */
     function visit(node) {
         // Only consider exported nodes
-        if (!isNodeExported(node)) {
+        if (!isNodeExported(node) && false) {
             return;
         }
 
-        if (ts.isModuleDeclaration(node)) {
+        if (ts.isModuleDeclaration(node) || ts.isModuleBody(node)) {
             // This is a namespace, visit its children
             ts.forEachChild(node, visit);
             return;
